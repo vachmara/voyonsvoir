@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import styles from './BikiniEasterEgg.module.css';
 
 export default function BikiniEasterEgg() {
   const [showOverlay, setShowOverlay] = useState(false);
   const [keySequence, setKeySequence] = useState('');
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const targetSequence = 'bikini';
 
   useEffect(() => {
@@ -20,8 +21,13 @@ export default function BikiniEasterEgg() {
           if (newSequence === targetSequence) {
             setShowOverlay(true);
             
+            // Clear any existing timeout
+            if (timeoutRef.current) {
+              clearTimeout(timeoutRef.current);
+            }
+            
             // Auto-dismiss after 5 seconds
-            setTimeout(() => {
+            timeoutRef.current = setTimeout(() => {
               setShowOverlay(false);
             }, 5000);
             
@@ -37,8 +43,12 @@ export default function BikiniEasterEgg() {
     
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
+      // Clean up timeout on unmount
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
     };
-  }, []);
+  }, [targetSequence]);
 
   if (!showOverlay) return null;
 
