@@ -8,7 +8,7 @@ const TARGET_SEQUENCE = 'bikini';
 export default function BikiniEasterEgg() {
   const [showOverlay, setShowOverlay] = useState(false);
   const [keySequence, setKeySequence] = useState('');
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
@@ -16,7 +16,7 @@ export default function BikiniEasterEgg() {
       if (showOverlay && event.key === 'Escape') {
         setShowOverlay(false);
         if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
+          window.clearTimeout(timeoutRef.current);
         }
         return;
       }
@@ -44,11 +44,11 @@ export default function BikiniEasterEgg() {
             
             // Clear any existing timeout
             if (timeoutRef.current) {
-              clearTimeout(timeoutRef.current);
+              window.clearTimeout(timeoutRef.current);
             }
             
             // Auto-dismiss after 5 seconds
-            timeoutRef.current = setTimeout(() => {
+            timeoutRef.current = window.setTimeout(() => {
               setShowOverlay(false);
             }, 5000);
             
@@ -66,7 +66,7 @@ export default function BikiniEasterEgg() {
       window.removeEventListener('keydown', handleKeyPress);
       // Clean up timeout on unmount
       if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+        window.clearTimeout(timeoutRef.current);
       }
     };
   }, [showOverlay]);
