@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYSTEM DEFENSE // V6.0 CULT EDITION</title>
+    <title>SYSTEM DEFENSE // V6.1 FINAL</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
@@ -77,27 +77,40 @@
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             background: rgba(5, 5, 5, 0.98); z-index: 20; pointer-events: auto;
-            backdrop-filter: blur(5px); transition: opacity 0.5s;
+            backdrop-filter: blur(5px); transition: opacity 0.5s; overflow-y: auto; /* Allow scroll on small screens */
         }
 
-        h1 { font-size: 4rem; margin: 0; text-shadow: 0 0 20px var(--term-green); letter-spacing: 5px; text-align: center; margin-bottom: 10px; }
+        h1 { font-size: 3.5rem; margin: 0; text-shadow: 0 0 20px var(--term-green); letter-spacing: 5px; text-align: center; margin-bottom: 5px; }
         
-        .class-selector { display: flex; gap: 20px; margin: 30px 0; }
+        /* TUTORIAL SECTION */
+        .tutorial-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;
+            background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border: 1px solid #333;
+            max-width: 600px; width: 90%;
+        }
+        .tuto-item { display: flex; align-items: center; gap: 10px; font-size: 0.9rem; color: #ddd; }
+        .key { 
+            background: #222; border: 1px solid #666; border-radius: 4px; padding: 2px 8px; 
+            font-family: monospace; font-weight: bold; color: var(--term-white); box-shadow: 0 2px 0 #444;
+        }
+        .color-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: 0 0 5px currentColor; }
+
+        .class-selector { display: flex; gap: 20px; margin: 20px 0; justify-content: center; flex-wrap: wrap; }
         .class-card {
-            border: 1px solid #444; padding: 20px; width: 180px; cursor: pointer; transition: 0.3s;
+            border: 1px solid #444; padding: 15px; width: 160px; cursor: pointer; transition: 0.3s;
             text-align: center; background: rgba(0,0,0,0.5); position: relative; opacity: 0.7;
         }
         .class-card:hover { border-color: var(--term-green); opacity: 1; transform: translateY(-5px); }
         .class-card.selected { border-color: var(--term-gold); opacity: 1; box-shadow: 0 0 20px rgba(255, 215, 0, 0.2); transform: scale(1.05); }
         .class-card.locked { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
-        .class-name { font-weight: bold; font-size: 1.2rem; margin-bottom: 10px; color: var(--term-white); }
-        .class-stats { font-size: 0.8rem; color: #aaa; line-height: 1.4; }
-        .class-cost { margin-top: 10px; color: var(--term-gold); font-weight: bold; }
+        .class-name { font-weight: bold; font-size: 1.1rem; margin-bottom: 5px; color: var(--term-white); }
+        .class-stats { font-size: 0.75rem; color: #aaa; line-height: 1.4; }
+        .class-cost { margin-top: 5px; color: var(--term-gold); font-weight: bold; font-size: 0.9rem; }
 
         .data-bank { position: absolute; top: 20px; right: 20px; font-size: 1.5rem; color: var(--term-gold); text-shadow: 0 0 10px var(--term-gold); }
 
         button {
-            margin-top: 20px; background: transparent; color: var(--term-green);
+            margin-top: 10px; background: transparent; color: var(--term-green);
             border: 2px solid var(--term-green); padding: 15px 40px; font-size: 1.5rem;
             font-family: var(--ui-font); cursor: pointer; text-transform: uppercase;
             transition: 0.2s; box-shadow: 0 0 10px var(--term-green); position: relative; z-index: 30;
@@ -140,7 +153,22 @@
     <div id="start-screen" class="screen">
         <div class="data-bank">DATA: <span id="bank-val">0</span></div>
         <h1>SYSTEM DEFENSE</h1>
-        <p>V6.0 CULT EDITION // SELECT LOADOUT</p>
+        
+        <!-- TUTORIAL SECTION -->
+        <div class="tutorial-grid">
+            <div class="tuto-item">
+                <span class="key">A-Z</span> Taper pour détruire
+            </div>
+            <div class="tuto-item">
+                <span class="key">TAB</span> Scanner les cryptés <span class="color-dot" style="background:var(--term-purple)"></span>
+            </div>
+            <div class="tuto-item">
+                <span class="key">ESPACE</span> Lancer l'EMP (Jauge bleue)
+            </div>
+            <div class="tuto-item">
+                <span class="color-dot" style="background:var(--term-red)"></span> <strong>BOSS</strong> = Danger Mortel
+            </div>
+        </div>
 
         <div class="class-selector">
             <div class="class-card selected" onclick="selectClass(0)">
@@ -166,8 +194,7 @@
             </div>
         </div>
 
-        <button id="start-btn" onclick="initAudioAndStart()">INITIATE HACK</button>
-        <div style="margin-top:10px; font-size:0.8rem; color:#666;">AUDIO REQUIRED FOR EXPERIENCE</div>
+        <button id="start-btn" onclick="initAudioAndStart()">LANCER LE SYSTÈME</button>
     </div>
 
     <div id="game-over-screen" class="screen hidden">
@@ -420,8 +447,23 @@
 
                 ctx.fillStyle = isLocked ? '#fff' : '#444'; ctx.fillText(typedPart, this.x, this.y);
                 const typedWidth = ctx.measureText(typedPart).width;
-                ctx.fillStyle = this.color; ctx.globalAlpha = isLocked ? 1 : 0.8; 
-                ctx.fillText(remainPart, this.x + typedWidth, this.y);
+                
+                // Highlight next char if locked and not encrypted
+                if (isLocked && !this.isEncrypted && this.typedIndex < this.text.length) {
+                    const nextChar = this.text[this.typedIndex];
+                    ctx.fillStyle = "#fff"; // Bright Highlight
+                    ctx.shadowBlur = 10; ctx.shadowColor = "#fff";
+                    ctx.fillText(nextChar, this.x + typedWidth, this.y);
+                    const nextCharWidth = ctx.measureText(nextChar).width;
+                    
+                    // Remainder
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = this.color; ctx.globalAlpha = 0.8;
+                    ctx.fillText(remainPart.substring(1), this.x + typedWidth + nextCharWidth, this.y);
+                } else {
+                    ctx.fillStyle = this.color; ctx.globalAlpha = isLocked ? 1 : 0.8; 
+                    ctx.fillText(remainPart, this.x + typedWidth, this.y);
+                }
                 ctx.globalAlpha = 1; ctx.shadowBlur = 0;
             }
         }
@@ -446,11 +488,26 @@
                 ctx.fillText(`THREAT LEVEL: CRITICAL [${this.segments.length}]`, this.x, this.y - 25);
                 ctx.font = 'bold 40px "Share Tech Mono", monospace';
                 ctx.shadowBlur = 20; ctx.shadowColor = this.glow;
+                
                 const typedPart = this.text.substring(0, this.typedIndex);
-                const remainPart = this.text.substring(this.typedIndex);
+                
                 ctx.fillStyle = '#fff'; ctx.fillText(typedPart, this.x, this.y);
                 const typedWidth = ctx.measureText(typedPart).width;
-                ctx.fillStyle = this.color; ctx.fillText(remainPart, this.x + typedWidth, this.y);
+
+                // Boss Highlight Logic
+                if (this.typedIndex < this.text.length) {
+                    const nextChar = this.text[this.typedIndex];
+                    ctx.fillStyle = "#fff"; // Boss highlight
+                    ctx.shadowColor = "#fff";
+                    ctx.fillText(nextChar, this.x + typedWidth, this.y);
+                    const nextCharWidth = ctx.measureText(nextChar).width;
+                    
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = this.color;
+                    ctx.fillText(this.text.substring(this.typedIndex + 1), this.x + typedWidth + nextCharWidth, this.y);
+                } else {
+                    ctx.fillStyle = this.color; ctx.fillText(this.text.substring(this.typedIndex), this.x + typedWidth, this.y);
+                }
                 ctx.shadowBlur = 0;
             }
         }
