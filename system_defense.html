@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYSTEM DEFENSE // V2.1</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --bg-color: #050505;
+            --term-green: #0f0;
+            --term-glow: #00ff00;
+            --term-red: #ff3333;
+            --term-blue: #00f3ff;
+            --term-gold: #ffd700;
+            --term-white: #ffffff;
+            --ui-font: 'Share Tech Mono', monospace;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--term-green);
+            font-family: var(--ui-font);
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+            transition: box-shadow 0.3s;
+        }
+
+        /* Classe ajoutée quand le temps est gelé */
+        body.frozen {
+            box-shadow: inset 0 0 50px var(--term-blue);
+        }
+
+        /* Effet CRT */
+        .crt-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: 
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,0.6) 100%);
+            background-size: 100% 4px, 100% 100%;
+            z-index: 10;
+        }
+
+        /* HUD */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 5;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 1.5rem;
+            text-shadow: 0 0 10px var(--term-glow);
+        }
+
+        .stat-block {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .label { font-size: 0.8rem; opacity: 0.7; }
+        .value { font-size: 1.8rem; font-weight: bold; }
+
+        .combo-box {
+            color: var(--term-gold);
+            text-shadow: 0 0 10px var(--term-gold);
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .combo-active { opacity: 1; }
+
+        /* Notification de bonus (FREEZE / REPAIR) */
+        #bonus-msg {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 3rem;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.5s;
+            text-shadow: 0 0 20px currentColor;
+            z-index: 8;
+        }
+
+        .integrity-bar-container {
+            width: 300px;
+            height: 20px;
+            border: 2px solid var(--term-green);
+            padding: 2px;
+            margin-top: 5px;
+        }
+
+        .integrity-fill {
+            height: 100%;
+            background-color: var(--term-green);
+            width: 100%;
+            box-shadow: 0 0 10px var(--term-glow);
+            transition: width 0.2s, background-color 0.2s;
+        }
+
+        /* Menus */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(5, 5, 5, 0.95);
+            z-index: 20;
+            pointer-events: auto;
+            backdrop-filter: blur(5px);
+            transition: opacity 0.5s;
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin: 0;
+            text-shadow: 0 0 20px var(--term-green);
+            letter-spacing: 5px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h2 { margin: 10px 0; font-size: 2rem; }
+
+        p { font-size: 1.2rem; max-width: 600px; text-align: center; line-height: 1.5; margin-bottom: 30px; color: #ccc; }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+        .legend-item { display: flex; align-items: center; gap: 10px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+        button {
+            margin-top: 30px;
+            background: transparent;
+            color: var(--term-green);
+            border: 2px solid var(--term-green);
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            font-family: var(--ui-font);
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.2s;
+            box-shadow: 0 0 10px var(--term-green);
+        }
+
+        button:hover {
+            background: var(--term-green);
+            color: black;
+            box-shadow: 0 0 30px var(--term-green);
+        }
+
+        .hidden { display: none !important; }
+        .critical { background-color: var(--term-red) !important; box-shadow: 0 0 10px var(--term-red) !important; }
+        .shake { animation: shake 0.5s; }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="crt-overlay"></div>
+
+    <!-- HUD -->
+    <div id="ui-layer">
+        <div id="bonus-msg">SYSTEM FREEZE</div>
+
+        <div class="hud-top">
+            <div class="stat-block">
+                <span class="label">SCORE</span>
+                <span class="value" id="score">0</span>
+            </div>
+            
+            <div class="combo-box" id="combo-display">
+                <span class="label">COMBO</span><br>
+                <span class="value" id="combo-val">x1</span>
+            </div>
+
+            <div class="stat-block" style="text-align: right;">
+                <span class="label">WAVE</span>
+                <span class="value" id="level">1</span>
+            </div>
+        </div>
+
+        <div style="align-self: flex-end; color: var(--term-red); text-shadow: 0 0 5px red;">
+            SYSTEM INTEGRITY
+            <div class="integrity-bar-container">
+                <div id="integrity" class="integrity-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="screen">
+        <h1>SYSTEM DEFENSE</h1>
+        <p>
+            Tapez les mots pour détruire les virus.<br>
+            Attention à la barre d'intégrité en bas.
+        </p>
+
+        <div class="legend">
+            <div class="legend-item">
+                <span class="dot" style="background:var(--term-green); box-shadow:0 0 5px var(--term-green)"></span> NORMAL
+            </div>
+            <div class="legend-item">
+                <span class="dot" style="background:var(--term-blue); box-shadow:0 0 5px var(--term-blue)"></span> GEL (3s)
+            </div>
+            <div class="legend-item">
+                <span class="dot" style="background:var(--term-gold); box-shadow:0 0 5px var(--term-gold)"></span> SOIN (+15%)
+            </div>
+        </div>
+
+        <div style="margin-bottom: 20px; font-size: 1.2rem; color: var(--term-gold);">
+            MEILLEUR SCORE LOCAL : <span id="high-score-start">0</span>
+        </div>
+        <button onclick="initAudioAndStart()">INITIALIZE_DEFENSE.EXE</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="screen hidden">
+        <h1 style="color: var(--term-red); text-shadow: 0 0 20px red;">SYSTEM FAILURE</h1>
+        <p>ROOT ACCESS LOST.</p>
+        
+        <h2>SCORE: <span id="final-score">0</span></h2>
+        <p style="color: var(--term-gold);">BEST: <span id="final-best">0</span></p>
+
+        <button onclick="resetGame()">REBOOT SYSTEM</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- AUDIO ENGINE (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const Sounds = {
+            type: () => playTone(800, 'square', 0.05, 0.1),
+            lock: () => playTone(1200, 'sine', 0.1, 0.1),
+            explosion: () => playNoise(0.3),
+            freeze: () => {
+                playTone(400, 'sine', 0.1, 0.2);
+                setTimeout(() => playTone(300, 'sine', 0.3, 0.2), 100);
+            },
+            heal: () => {
+                playTone(600, 'triangle', 0.1, 0.2);
+                setTimeout(() => playTone(900, 'triangle', 0.3, 0.2), 100);
+            },
+            error: () => playTone(150, 'sawtooth', 0.2, 0.2),
+            damage: () => playTone(100, 'sawtooth', 0.5, 0.5),
+            start: () => {
+                playTone(400, 'sine', 0.1, 0.1);
+                setTimeout(() => playTone(600, 'sine', 0.1, 0.1), 100);
+                setTimeout(() => playTone(1000, 'square', 0.4, 0.2), 200);
+            }
+        };
+
+        function playTone(freq, type, duration, vol) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playNoise(duration) {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            noise.connect(gain);
+            gain.connect(audioCtx.destination);
+            noise.start();
+        }
+
+        // --- GAME CONFIG ---
+        let width, height;
+        const resize = () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            ctx.font = '24px "Share Tech Mono", monospace';
+        };
+        window.addEventListener('resize', resize);
+        resize();
+
+        const wordList = [
+            "ACCESS", "ALGORITHM", "BACKDOOR", "BANDWIDTH", "BINARY", "BIOS", "BITCOIN", "BLOCKCHAIN", 
+            "BOTNET", "BUFFER", "BYPASS", "CACHE", "CIPHER", "CLOUD", "CLUSTER", "CODE", "COMMAND", 
+            "COMPILER", "COOKIE", "CORRUPT", "CYBER", "DATA", "DEBUG", "DECRYPT", "DENIAL", "DNS", 
+            "DOMAIN", "DOWNLOAD", "DRIVER", "ENCRYPT", "ETHERNET", "EXPLOIT", "FIREWALL", "FIRMWARE", 
+            "FTP", "GATEWAY", "GIGABYTE", "GLITCH", "HACKER", "HARDWARE", "HASH", "HEX", "HTML", "HTTP", 
+            "HYPERLINK", "INJECT", "INPUT", "INTERFACE", "IP", "JAVA", "KERNEL", "KEY", "LATENCY", "LINUX", 
+            "LOGIC", "LOGIN", "MALWARE", "MATRIX", "MEMORY", "MODEM", "MONITOR", "NETWORK", "NODE", "NULL", 
+            "OFFLINE", "ONLINE", "OUTPUT", "PACKET", "PASSWORD", "PHISHING", "PING", "PIXEL", "PORT", 
+            "PROCESS", "PROTOCOL", "PROXY", "PYTHON", "QUERY", "RAM", "REBOOT", "ROOT", "ROUTER", "RUNTIME", 
+            "SCRIPT", "SERVER", "SHELL", "SIGNAL", "SOCKET", "SOFTWARE", "SOURCE", "SPAM", "SQL", "SSH", 
+            "STACK", "STATUS", "SYNTAX", "SYSTEM", "TCP", "TERMINAL", "TOKEN", "TRAFFIC", "TROJAN", "UNIX", 
+            "UPLOAD", "URL", "USER", "VECTOR", "VIRUS", "VPN", "WEB", "WIFI", "WORM", "XML", "ZERO"
+        ];
+
+        // --- STATE ---
+        let activeWords = [];
+        let particles = [];
+        let score = 0;
+        let combo = 0;
+        let maxCombo = 0;
+        let integrity = 100;
+        let wave = 1;
+        let gameRunning = false;
+        let lastTime = 0;
+        let spawnTimer = 0;
+        let spawnInterval = 2000;
+        let globalSpeedMultiplier = 1;
+        let lockedWordIndex = -1;
+        let freezeTimer = 0; // Timer for the freeze effect in ms
+        
+        // High Score
+        let highScore = localStorage.getItem('sysDefHighScore') || 0;
+        document.getElementById('high-score-start').innerText = highScore;
+
+        // Elements
+        const scoreEl = document.getElementById('score');
+        const levelEl = document.getElementById('level');
+        const integrityEl = document.getElementById('integrity');
+        const comboDisplay = document.getElementById('combo-display');
+        const comboVal = document.getElementById('combo-val');
+        const finalScoreEl = document.getElementById('final-score');
+        const finalBestEl = document.getElementById('final-best');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const bonusMsg = document.getElementById('bonus-msg');
+
+        class Word {
+            constructor() {
+                this.text = wordList[Math.floor(Math.random() * wordList.length)];
+                this.x = Math.random() * (width - 200) + 50;
+                this.y = -50;
+                this.speed = (Math.random() * 1 + 0.5) * globalSpeedMultiplier;
+                this.typedIndex = 0;
+                
+                // Bonus Logic
+                const roll = Math.random();
+                if (roll > 0.95) {
+                    this.type = 'FREEZE';
+                    this.color = '#00f3ff'; // Blue
+                    this.glow = '#00f3ff';
+                } else if (roll > 0.90) {
+                    this.type = 'HEAL';
+                    this.color = '#ffd700'; // Gold
+                    this.glow = '#ffd700';
+                } else {
+                    this.type = 'NORMAL';
+                    this.color = '#0f0'; // Green
+                    this.glow = '#0f0';
+                }
+            }
+
+            update(deltaTime) {
+                // If freeze active, do NOT move
+                if (freezeTimer <= 0) {
+                    this.y += this.speed * (deltaTime / 16);
+                }
+            }
+
+            draw(ctx, isLocked) {
+                ctx.font = 'bold 24px "Share Tech Mono", monospace';
+                
+                if (isLocked) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = this.glow;
+                } else if (this.type !== 'NORMAL') {
+                    // Always glow a bit if special
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = this.glow;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+
+                const typedPart = this.text.substring(0, this.typedIndex);
+                const remainPart = this.text.substring(this.typedIndex);
+
+                ctx.fillStyle = isLocked ? '#fff' : '#444';
+                ctx.fillText(typedPart, this.x, this.y);
+
+                const typedWidth = ctx.measureText(typedPart).width;
+
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = isLocked ? 1 : 0.8; 
+                ctx.fillText(remainPart, this.x + typedWidth, this.y);
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 12;
+                this.vy = (Math.random() - 0.5) * 12;
+                this.life = 1.0;
+                this.color = color || `rgb(0, ${Math.floor(Math.random()*155 + 100)}, 0)`;
+                this.size = Math.random() * 3 + 1;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= 0.04;
+            }
+            draw(ctx) {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function spawnExplosion(x, y, color) {
+            for(let i=0; i<20; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function initAudioAndStart() {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            Sounds.start();
+            startGame();
+        }
+
+        function startGame() {
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            resetVars();
+            gameRunning = true;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            gameOverScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+            document.body.classList.remove('frozen');
+            bonusMsg.style.opacity = 0;
+            document.getElementById('high-score-start').innerText = highScore;
+        }
+
+        function resetVars() {
+            activeWords = [];
+            particles = [];
+            score = 0;
+            combo = 0;
+            integrity = 100;
+            wave = 1;
+            spawnInterval = 2000;
+            globalSpeedMultiplier = 1;
+            lockedWordIndex = -1;
+            freezeTimer = 0;
+            updateHUD();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            Sounds.damage();
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('sysDefHighScore', highScore);
+            }
+            finalScoreEl.innerText = score;
+            finalBestEl.innerText = highScore;
+            gameOverScreen.classList.remove('hidden');
+            document.body.classList.remove('frozen');
+        }
+
+        function updateHUD() {
+            scoreEl.innerText = score;
+            levelEl.innerText = wave;
+            integrityEl.style.width = integrity + "%";
+            
+            // Combo logic
+            if (combo > 1) {
+                comboDisplay.classList.add('combo-active');
+                comboVal.innerText = "x" + combo;
+                comboVal.style.color = combo > 5 ? '#ff00ff' : '#ffd700'; 
+            } else {
+                comboDisplay.classList.remove('combo-active');
+            }
+
+            if (integrity < 30) integrityEl.classList.add('critical');
+            else integrityEl.classList.remove('critical');
+        }
+
+        function showBonusMessage(text, color) {
+            bonusMsg.innerText = text;
+            bonusMsg.style.color = color;
+            bonusMsg.style.opacity = 1;
+            setTimeout(() => { bonusMsg.style.opacity = 0; }, 1500);
+        }
+
+        function breakCombo() {
+            if (combo > 5) Sounds.error(); 
+            combo = 0;
+            updateHUD();
+        }
+
+        function increaseDifficulty() {
+            if (score > 0 && score % 10 === 0) {
+                wave++;
+                globalSpeedMultiplier += 0.1;
+                spawnInterval = Math.max(500, spawnInterval - 100);
+            }
+        }
+
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+
+            const deltaTime = timestamp - lastTime || 16;
+            lastTime = timestamp;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Gestion du Freeze Timer
+            if (freezeTimer > 0) {
+                freezeTimer -= deltaTime;
+                if (freezeTimer <= 0) {
+                    freezeTimer = 0;
+                    document.body.classList.remove('frozen');
+                }
+            } else {
+                // Seulement spawn si pas gelé
+                spawnTimer += deltaTime;
+                if (spawnTimer > spawnInterval) {
+                    activeWords.push(new Word());
+                    spawnTimer = 0;
+                }
+            }
+
+            for (let i = activeWords.length - 1; i >= 0; i--) {
+                let word = activeWords[i];
+                word.update(deltaTime);
+                
+                // Collision bas
+                if (word.y > height - 20) {
+                    integrity -= 10;
+                    Sounds.damage();
+                    breakCombo();
+                    document.body.classList.add('shake');
+                    setTimeout(() => document.body.classList.remove('shake'), 500);
+                    
+                    if (i === lockedWordIndex) lockedWordIndex = -1;
+                    else if (i < lockedWordIndex) lockedWordIndex--; 
+
+                    activeWords.splice(i, 1);
+                    
+                    if (integrity <= 0) {
+                        integrity = 0;
+                        updateHUD();
+                        gameOver();
+                        return;
+                    }
+                }
+                
+                updateHUD();
+                word.draw(ctx, i === lockedWordIndex);
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.update();
+                p.draw(ctx);
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (!gameRunning) return;
+            if (e.key.length > 1) return; 
+
+            const key = e.key.toUpperCase();
+            
+            if (lockedWordIndex !== -1) {
+                const word = activeWords[lockedWordIndex];
+                if (!word) { lockedWordIndex = -1; return; }
+
+                const nextChar = word.text[word.typedIndex];
+
+                if (key === nextChar) {
+                    word.typedIndex++;
+                    Sounds.type();
+                    
+                    if (word.typedIndex === word.text.length) {
+                        // Word destroyed
+                        Sounds.explosion();
+                        spawnExplosion(word.x + 50, word.y, word.color);
+                        
+                        // --- BONUS EFFECTS ---
+                        if (word.type === 'FREEZE') {
+                            freezeTimer = 3000; // 3 seconds
+                            document.body.classList.add('frozen');
+                            Sounds.freeze();
+                            showBonusMessage("SYSTEM FREEZE", "#00f3ff");
+                        } else if (word.type === 'HEAL') {
+                            integrity = Math.min(100, integrity + 15);
+                            Sounds.heal();
+                            showBonusMessage("REPAIR +15%", "#ffd700");
+                        }
+
+                        // Score logic
+                        let points = 1 + Math.floor(combo / 5);
+                        score += points;
+                        combo++;
+                        
+                        activeWords.splice(lockedWordIndex, 1);
+                        lockedWordIndex = -1;
+                        increaseDifficulty();
+                        updateHUD();
+                    }
+                } else {
+                    Sounds.error();
+                    breakCombo();
+                }
+            } 
+            else {
+                let bestCandidateIndex = -1;
+                let maxY = -Infinity;
+
+                for (let i = 0; i < activeWords.length; i++) {
+                    if (activeWords[i].text.startsWith(key)) {
+                        if (activeWords[i].y > maxY) {
+                            maxY = activeWords[i].y;
+                            bestCandidateIndex = i;
+                        }
+                    }
+                }
+
+                if (bestCandidateIndex !== -1) {
+                    lockedWordIndex = bestCandidateIndex;
+                    activeWords[lockedWordIndex].typedIndex = 1;
+                    Sounds.lock();
+                    
+                    if (activeWords[lockedWordIndex].text.length === 1) {
+                         // One letter word case (rare but possible)
+                         Sounds.explosion();
+                         spawnExplosion(activeWords[lockedWordIndex].x, activeWords[lockedWordIndex].y, activeWords[lockedWordIndex].color);
+                         activeWords.splice(lockedWordIndex, 1);
+                         lockedWordIndex = -1;
+                         score++;
+                         combo++;
+                         increaseDifficulty();
+                         updateHUD();
+                    }
+                } else {
+                    Sounds.error();
+                    breakCombo();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
