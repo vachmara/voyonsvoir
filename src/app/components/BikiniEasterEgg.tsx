@@ -3,22 +3,23 @@
 import { useEffect, useState, useRef } from 'react';
 import styles from './BikiniEasterEgg.module.css';
 
+const TARGET_SEQUENCE = 'bikini';
+
 export default function BikiniEasterEgg() {
   const [showOverlay, setShowOverlay] = useState(false);
   const [keySequence, setKeySequence] = useState('');
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const targetSequence = 'bikini';
 
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
       
       // Only track letter keys
-      if (key.length === 1 && key.match(/[a-z]/)) {
+      if (key.length === 1 && key >= 'a' && key <= 'z') {
         setKeySequence((prev) => {
-          const newSequence = (prev + key).slice(-targetSequence.length);
+          const newSequence = (prev + key).slice(-TARGET_SEQUENCE.length);
           
-          if (newSequence === targetSequence) {
+          if (newSequence === TARGET_SEQUENCE) {
             setShowOverlay(true);
             
             // Clear any existing timeout
@@ -48,7 +49,7 @@ export default function BikiniEasterEgg() {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [targetSequence]);
+  }, []);
 
   if (!showOverlay) return null;
 
