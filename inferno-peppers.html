@@ -433,7 +433,7 @@
 
         /* Bikini Mode Styles */
         body.bikini-mode {
-            background: linear-gradient(135deg, #87CEEB 0%, #4A90E2 30%, #F4E4C1 70%, #FFD89B 100%) !important;
+            background: linear-gradient(135deg, #87CEEB 0%, #4A90E2 30%, #F4E4C1 70%, #FFD89B 100%);
             transition: background 0.5s ease;
         }
 
@@ -443,10 +443,10 @@
 
         body.bikini-mode header h1,
         body.bikini-mode .game-title {
-            background: linear-gradient(135deg, #FF6B9D, #FFA07A, #FFD700) !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            background-clip: text !important;
+            background: linear-gradient(135deg, #FF6B9D, #FFA07A, #FFD700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .bikini-overlay {
@@ -711,11 +711,6 @@
                     c.classList.add('revealed');
                 });
 
-                // Update emojis for bikini mode
-                if (bikiniMode) {
-                    updateChocolateEmojis();
-                }
-
                 document.getElementById('actionButtons').classList.add('visible');
             }, 600);
         }
@@ -784,15 +779,9 @@
             } else {
                 showBikiniNotification('🍫 Back to chocolate mode! 🌶️');
             }
-
-            // Update emojis in current game if chocolates are revealed
-            updateChocolateEmojis();
         }
 
-        function updateChocolateEmojis() {
-            // Emojis are now handled by CSS, this function is kept for compatibility
-            // but no longer needs to manually update the DOM
-        }
+
 
         // Keyboard event listener for bikini mode
         document.addEventListener('keydown', (e) => {
@@ -806,8 +795,8 @@
             // Add key to sequence
             keySequence.push(key);
 
-            // Keep only last 6 keys
-            if (keySequence.length > 6) {
+            // Keep only last N keys (matching target sequence length)
+            if (keySequence.length > targetSequence.length) {
                 keySequence.shift();
             }
 
