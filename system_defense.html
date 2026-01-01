@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYSTEM DEFENSE // V7.1 VISUAL FIX</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        :root {
+            --bg-color: #050505;
+            --term-green: #0f0;
+            --term-red: #ff3333;
+            --term-blue: #00f3ff;
+            --term-gold: #ffd700;
+            --term-purple: #bd00ff;
+            --ui-font: 'Share Tech Mono', monospace;
+            --glass-panel: rgba(10, 20, 10, 0.85);
+        }
+
+        body {
+            margin: 0; overflow: hidden; background-color: var(--bg-color);
+            color: var(--term-green); font-family: var(--ui-font);
+            height: 100vh; width: 100vw; user-select: none;
+            transition: box-shadow 0.3s;
+        }
+
+        body.frozen { box-shadow: inset 0 0 50px var(--term-blue); }
+        body.emp-flash { animation: flashWhite 0.5s; }
+        body.damage-glitch canvas { animation: glitchAnim 0.2s; }
+
+        @keyframes flashWhite { 0% { background: white; } 100% { background: var(--bg-color); } }
+        @keyframes glitchAnim {
+            0% { transform: translate(0); }
+            20% { transform: translate(-5px, 5px); filter: hue-rotate(90deg); }
+            40% { transform: translate(5px, -5px); filter: hue-rotate(-90deg); }
+            60% { transform: translate(-5px, 0); }
+            100% { transform: translate(0); filter: none; }
+        }
+
+        .crt-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+                        radial-gradient(circle, rgba(0,0,0,0) 60%, rgba(0,0,0,0.6) 100%);
+            background-size: 100% 4px, 100% 100%; z-index: 10;
+        }
+
+        .alert-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: red; opacity: 0; pointer-events: none; z-index: 9;
+            transition: opacity 0.5s; mix-blend-mode: overlay;
+        }
+        .boss-active .alert-overlay { animation: pulseAlert 1s infinite; }
+        @keyframes pulseAlert { 0% { opacity: 0; } 50% { opacity: 0.3; } 100% { opacity: 0; } }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between; z-index: 15;
+            padding: 20px; box-sizing: border-box;
+        }
+
+        .hud-top { display: flex; justify-content: space-between; align-items: flex-start; font-size: 1.5rem; text-shadow: 0 0 10px currentColor; }
+        .stat-block { display: flex; flex-direction: column; background: var(--glass-panel); padding: 10px; border-radius: 4px; border: 1px solid rgba(0, 255, 0, 0.3); }
+        .label { font-size: 0.8rem; opacity: 0.7; }
+        .value { font-size: 1.8rem; font-weight: bold; }
+
+        .combo-box { color: var(--term-gold); text-align: center; opacity: 0; transition: opacity 0.2s; }
+        .combo-active { opacity: 1; transform: scale(1.2); }
+
+        .emp-container { width: 200px; }
+        .emp-bar-frame { width: 100%; height: 10px; border: 1px solid var(--term-blue); padding: 2px; background: rgba(0,0,0,0.5); }
+        .emp-fill { width: 0%; height: 100%; background-color: var(--term-blue); box-shadow: 0 0 10px var(--term-blue); transition: width 0.2s; }
+        .emp-ready .emp-fill { background-color: white; box-shadow: 0 0 20px var(--term-blue); }
+
+        #bonus-msg {
+            position: absolute; top: 30%; left: 50%; transform: translateX(-50%);
+            font-size: 3rem; font-weight: bold; opacity: 0; transition: opacity 0.5s;
+            text-shadow: 0 0 20px currentColor; z-index: 18; text-align: center; width: 100%;
+        }
+
+        .hud-bottom { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; }
+        .integrity-bar-container { width: 300px; height: 20px; border: 2px solid currentColor; padding: 2px; margin-top: 5px; background: rgba(0,0,0,0.5); }
+        .integrity-fill { height: 100%; background-color: currentColor; width: 100%; box-shadow: 0 0 10px currentColor; transition: width 0.2s; }
+
+        /* --- STYLED START SCREEN --- */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: rgba(0, 5, 0, 0.95); z-index: 20; pointer-events: auto;
+            backdrop-filter: blur(8px); transition: opacity 0.5s; overflow-y: auto;
+        }
+
+        .terminal-window {
+            border: 2px solid var(--term-green);
+            background: rgba(0, 20, 0, 0.9);
+            padding: 40px;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.1), inset 0 0 50px rgba(0, 20, 0, 0.8);
+            max-width: 900px;
+            width: 90%;
+            position: relative;
+        }
+
+        .terminal-window::before {
+            content: "SYSTEM_DEFENSE_V7.1.EXE";
+            position: absolute; top: -12px; left: 20px;
+            background: var(--bg-color); padding: 0 10px; color: var(--term-green);
+            font-weight: bold; border: 1px solid var(--term-green);
+        }
+
+        .terminal-window::after {
+            content: ""; position: absolute; bottom: -2px; right: -2px;
+            width: 20px; height: 20px; border-bottom: 2px solid var(--term-green); border-right: 2px solid var(--term-green);
+        }
+
+        h1 { 
+            font-size: 4rem; margin: 0 0 10px 0; 
+            text-shadow: 0 0 15px var(--term-green); 
+            letter-spacing: 8px; text-align: center; 
+            border-bottom: 1px dashed var(--term-green);
+            padding-bottom: 20px;
+        }
+        
+        .sys-status {
+            display: flex; justify-content: space-between; margin-bottom: 20px;
+            font-size: 0.9rem; color: #0a0; border-bottom: 1px solid #030; padding-bottom: 5px;
+        }
+
+        /* TUTORIAL SECTION */
+        .tutorial-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0;
+            background: rgba(0, 50, 0, 0.2); padding: 15px; border: 1px solid #050;
+        }
+        .tuto-item { display: flex; align-items: center; gap: 10px; font-size: 1rem; color: #cfc; }
+        .key { 
+            background: #000; border: 1px solid var(--term-green); border-radius: 3px; padding: 2px 8px; 
+            font-family: monospace; font-weight: bold; color: var(--term-green); box-shadow: 0 0 5px var(--term-green);
+        }
+        .color-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; box-shadow: 0 0 8px currentColor; }
+
+        .class-selector { display: flex; gap: 20px; margin: 30px 0; justify-content: center; flex-wrap: wrap; }
+        .class-card {
+            border: 1px solid #333; padding: 15px; width: 180px; cursor: pointer; transition: 0.3s;
+            text-align: center; background: rgba(0,0,0,0.6); position: relative; opacity: 0.6;
+        }
+        .class-card:hover { border-color: var(--term-green); opacity: 1; background: rgba(0, 30, 0, 0.8); }
+        .class-card.selected { border-color: var(--term-gold); opacity: 1; box-shadow: 0 0 15px rgba(255, 215, 0, 0.1); transform: scale(1.05); z-index: 2; }
+        .class-card.locked { filter: grayscale(1) brightness(0.5); opacity: 0.4; cursor: not-allowed; }
+        
+        .class-name { font-weight: bold; font-size: 1.2rem; margin-bottom: 8px; color: #fff; text-decoration: underline; }
+        .class-stats { font-size: 0.85rem; color: #aaa; line-height: 1.5; text-align: left; padding-left: 10px; }
+        .class-cost { margin-top: 10px; color: var(--term-gold); font-weight: bold; font-size: 1rem; border-top: 1px solid #333; padding-top: 5px; }
+
+        .data-bank { 
+            position: absolute; top: 30px; right: 40px; 
+            font-size: 1.5rem; color: var(--term-gold); 
+            text-shadow: 0 0 10px var(--term-gold); 
+            border: 1px solid var(--term-gold); padding: 5px 15px;
+            background: rgba(0,0,0,0.8);
+        }
+
+        button#start-btn {
+            width: 100%; margin-top: 20px; background: var(--term-green); color: black;
+            border: none; padding: 20px; font-size: 1.8rem; font-weight: bold;
+            font-family: var(--ui-font); cursor: pointer; text-transform: uppercase;
+            transition: 0.2s; box-shadow: 0 0 20px var(--term-green); clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+        button#start-btn:hover { background: #fff; box-shadow: 0 0 40px #fff; transform: scale(1.02); }
+
+        .hidden { display: none !important; }
+        #matrixCanvas, #gameCanvas { position: absolute; top: 0; left: 0; }
+        #matrixCanvas { z-index: 0; } #gameCanvas { z-index: 1; }
+    </style>
+</head>
+<body>
+
+    <div class="crt-overlay"></div>
+    <div class="alert-overlay"></div>
+
+    <div id="ui-layer">
+        <div id="bonus-msg">SYSTEM FREEZE</div>
+        <div class="hud-top" id="hud-color-target">
+            <div class="stat-block"><span class="label">SCORE</span><span class="value" id="score">0</span></div>
+            <div style="display:flex; flex-direction:column; align-items:center;">
+                <div class="combo-box" id="combo-display"><span class="label">COMBO</span><br><span class="value" id="combo-val">x1</span></div>
+            </div>
+            <div class="stat-block" style="text-align: right;"><span class="label">WAVE</span><span class="value" id="level">1</span></div>
+        </div>
+        <div class="hud-bottom" id="hud-bottom-color">
+            <div class="emp-container">
+                <div class="emp-label">EMP (SPACE)</div>
+                <div class="emp-bar-frame"><div id="emp-bar" class="emp-fill"></div></div>
+            </div>
+            <div style="text-align: right;">
+                INTEGRITY
+                <div class="integrity-bar-container"><div id="integrity" class="integrity-fill"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- START SCREEN & CLASS SELECTION -->
+    <div id="start-screen" class="screen">
+        <div class="terminal-window">
+            <div class="sys-status">
+                <span>CONNEXION: SECURE</span>
+                <span>SERVER: LOCALHOST</span>
+                <span>UPTIME: 99.9%</span>
+            </div>
+            
+            <div class="data-bank">DATA: <span id="bank-val">0</span></div>
+            <h1>SYSTEM DEFENSE</h1>
+            
+            <!-- TUTORIAL SECTION -->
+            <div class="tutorial-grid">
+                <div class="tuto-item">
+                    <span class="key">A-Z</span> TAPER POUR DÉTRUIRE
+                </div>
+                <div class="tuto-item">
+                    <span class="key">TAB</span> SCANNER LES CRYPTÉS <span class="color-dot" style="background:var(--term-purple)"></span>
+                </div>
+                <div class="tuto-item">
+                    <span class="key">ESPACE</span> DÉCLENCHER EMP (JAUGE BLEUE)
+                </div>
+                <div class="tuto-item">
+                    <span class="color-dot" style="background:var(--term-red)"></span> <strong>BOSS</strong> = DANGER CRITIQUE
+                </div>
+            </div>
+
+            <div class="class-selector">
+                <div class="class-card selected" onclick="selectClass(0)">
+                    <div class="class-name">SCRIPT KIDDIE</div>
+                    <div class="class-stats">
+                        > HP: 100%<br>> SPEED: 1.0x<br>> SCORE: 1.0x
+                    </div>
+                    <div class="class-cost">UNLOCKED</div>
+                </div>
+                <div class="class-card locked" id="class-1" onclick="selectClass(1)">
+                    <div class="class-name">TANK</div>
+                    <div class="class-stats">
+                        > HP: 200%<br>> SPEED: 0.8x<br>> EMP: SLOW
+                    </div>
+                    <div class="class-cost">500 DATA</div>
+                </div>
+                <div class="class-card locked" id="class-2" onclick="selectClass(2)">
+                    <div class="class-name">SPEEDRUNNER</div>
+                    <div class="class-stats">
+                        > HP: 50%<br>> SPEED: 1.5x<br>> SCORE: 2.0x
+                    </div>
+                    <div class="class-cost">2000 DATA</div>
+                </div>
+            </div>
+
+            <button id="start-btn" onclick="initAudioAndStart()">INITIALISER LA SÉQUENCE</button>
+        </div>
+    </div>
+
+    <div id="game-over-screen" class="screen hidden">
+        <h1 style="color: var(--term-red);">SYSTEM FAILURE</h1>
+        <div class="rank-title" id="final-rank">SCRIPT KIDDIE</div>
+        <div class="stats-grid">
+            <div>SCORE FINAL:</div><div id="final-score" style="text-align:right">0</div>
+            <div>DATA MINED:</div><div id="data-earned" style="text-align:right; color:var(--term-gold)">+0</div>
+        </div>
+        <button onclick="resetGame()" style="border:1px solid #fff; padding:15px; background:transparent; color:#fff; cursor:pointer;">REBOOT SYSTEM</button>
+    </div>
+
+    <canvas id="matrixCanvas"></canvas>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const mCanvas = document.getElementById('matrixCanvas');
+        const mCtx = mCanvas.getContext('2d');
+
+        // --- GAME CONFIG & PERSISTENCE ---
+        let totalData = parseInt(localStorage.getItem('sysDefData')) || 0;
+        let unlockedClasses = JSON.parse(localStorage.getItem('sysDefClasses')) || [true, false, false];
+        
+        const CLASSES = [
+            { name: "SCRIPT KIDDIE", hp: 100, speed: 1.0, scoreMult: 1.0, empRate: 1.0, color: '#0f0' },
+            { name: "TANK", hp: 200, speed: 0.8, scoreMult: 0.8, empRate: 0.5, color: '#00f3ff' },
+            { name: "SPEEDRUNNER", hp: 50, speed: 1.3, scoreMult: 2.0, empRate: 1.5, color: '#ff00ff' }
+        ];
+        let currentClassIdx = 0;
+
+        function updateUI() {
+            document.getElementById('bank-val').innerText = totalData;
+            for(let i=1; i<3; i++) {
+                const el = document.getElementById(`class-${i}`);
+                const cost = i===1 ? 500 : 2000;
+                if(unlockedClasses[i]) {
+                    el.classList.remove('locked');
+                    el.querySelector('.class-cost').innerText = "OWNED";
+                } else {
+                    el.querySelector('.class-cost').innerText = `${cost} DATA`;
+                }
+            }
+        }
+        updateUI();
+
+        window.selectClass = (idx) => {
+            const cost = idx===1 ? 500 : 2000;
+            if(!unlockedClasses[idx]) {
+                if(totalData >= cost) {
+                    totalData -= cost;
+                    unlockedClasses[idx] = true;
+                    localStorage.setItem('sysDefData', totalData);
+                    localStorage.setItem('sysDefClasses', JSON.stringify(unlockedClasses));
+                    updateUI();
+                    playTone(800, 'sine', 0.1, 0.1); playTone(1200, 'sine', 0.2, 0.1, 0.1);
+                } else {
+                    playTone(150, 'sawtooth', 0.2, 0.2); return;
+                }
+            }
+            currentClassIdx = idx;
+            document.querySelectorAll('.class-card').forEach((el, i) => { el.classList.toggle('selected', i === idx); });
+            document.documentElement.style.setProperty('--term-green', CLASSES[idx].color);
+        };
+
+        // --- AUDIO ENGINE ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let droneOsc, lfoOsc, droneGain;
+        let bossMusicInterval;
+        
+        function playTone(freq, type, duration, vol, delay=0) {
+            if(audioCtx.state === 'suspended') return;
+            setTimeout(() => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + duration);
+            }, delay * 1000);
+        }
+
+        function playNoise(duration) {
+            if(audioCtx.state === 'suspended') return;
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = buffer;
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            noise.connect(gain); gain.connect(audioCtx.destination);
+            noise.start();
+        }
+
+        const Sounds = {
+            type: () => playTone(800, 'square', 0.05, 0.05),
+            lock: () => playTone(1200, 'sine', 0.1, 0.05),
+            scan: () => { playTone(2000, 'sawtooth', 0.1, 0.1); playTone(1800, 'sawtooth', 0.1, 0.1, 0.1); },
+            emp: () => { playNoise(1.5); playTone(100, 'sawtooth', 1.5, 0.5); },
+            explosion: () => playNoise(0.2), 
+            bossHit: () => { playTone(150, 'sawtooth', 0.1, 0.2); playNoise(0.1); },
+            bossDie: () => { playTone(100, 'sawtooth', 1.0, 0.5); playNoise(1.0); },
+            freeze: () => { playTone(400, 'sine', 0.1, 0.1); setTimeout(() => playTone(300, 'sine', 0.3, 0.1), 100); },
+            heal: () => { playTone(600, 'triangle', 0.1, 0.1); setTimeout(() => playTone(900, 'triangle', 0.3, 0.1), 100); },
+            error: () => playTone(150, 'sawtooth', 0.1, 0.1),
+            damage: () => playTone(100, 'sawtooth', 0.4, 0.3),
+            start: () => { playTone(400, 'sine', 0.1, 0.1); setTimeout(() => playTone(1000, 'square', 0.4, 0.1), 200); },
+            startDrone: (speed = 1) => {
+                if(droneOsc) return;
+                droneOsc = audioCtx.createOscillator(); droneOsc.type = 'sawtooth'; droneOsc.frequency.value = 55 * speed;
+                lfoOsc = audioCtx.createOscillator(); lfoOsc.type = 'sine'; lfoOsc.frequency.value = 0.2 * speed;
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 200;
+                const lfoGain = audioCtx.createGain(); lfoGain.gain.value = 100;
+                droneGain = audioCtx.createGain(); droneGain.gain.value = 0.03;
+                lfoOsc.connect(lfoGain); lfoGain.connect(filter.frequency);
+                droneOsc.connect(filter); filter.connect(droneGain); droneGain.connect(audioCtx.destination);
+                droneOsc.start(); lfoOsc.start();
+            },
+            stopDrone: () => { if (droneOsc) { droneOsc.stop(); lfoOsc.stop(); droneOsc = null; } },
+            startBossMusic: () => {
+                Sounds.stopDrone(); 
+                if (bossMusicInterval) return;
+                let beatTick = 0;
+                bossMusicInterval = setInterval(() => {
+                    if (beatTick % 4 === 0) playTone(60, 'square', 0.1, 0.3);
+                    if (beatTick % 2 === 0) playNoise(0.05);
+                    const note = (beatTick % 8 < 4) ? 100 : 110; 
+                    playTone(note, 'sawtooth', 0.1, 0.15);
+                    beatTick++;
+                }, 110); 
+            },
+            stopBossMusic: () => { if (bossMusicInterval) { clearInterval(bossMusicInterval); bossMusicInterval = null; } Sounds.startDrone(integrity < 30 ? 1.5 : 1); }
+        };
+
+        // --- MATRIX BACKGROUND ---
+        let drops = [];
+        const fontSize = 16;
+        let columns;
+        const matrixChars = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789";
+        let matrixColor = "#0f0";
+
+        function initMatrix() {
+            columns = Math.floor(window.innerWidth / fontSize);
+            drops = [];
+            for (let i = 0; i < columns; i++) drops[i] = Math.random() * -100;
+        }
+
+        function drawMatrix() {
+            mCtx.fillStyle = "rgba(5, 5, 5, 0.1)"; mCtx.fillRect(0, 0, mCanvas.width, mCanvas.height);
+            mCtx.fillStyle = matrixColor; mCtx.font = fontSize + "px monospace";
+            for (let i = 0; i < drops.length; i++) {
+                const text = matrixChars.charAt(Math.floor(Math.random() * matrixChars.length));
+                mCtx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > mCanvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+        }
+
+        // --- GAME LOGIC ---
+        let width, height;
+        const resize = () => {
+            width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight;
+            mCanvas.width = width; mCanvas.height = height;
+            ctx.font = '24px "Share Tech Mono", monospace';
+            initMatrix();
+        };
+        window.addEventListener('resize', resize);
+
+        // DICTIONNAIRE ÉTENDU
+        const wordList = [
+            "ACCESS", "ALGORITHM", "BACKDOOR", "BANDWIDTH", "BINARY", "BIOS", "BITCOIN", "BLOCKCHAIN", "BOTNET", "BUFFER", 
+            "BYPASS", "CACHE", "CIPHER", "CLOUD", "CLUSTER", "CODE", "COMMAND", "COMPILER", "COOKIE", "CORRUPT", 
+            "CYBER", "DATA", "DEBUG", "DECRYPT", "DENIAL", "DNS", "DOMAIN", "DOWNLOAD", "DRIVER", "ENCRYPT", 
+            "ETHERNET", "EXPLOIT", "FIREWALL", "FIRMWARE", "FTP", "GATEWAY", "GIGABYTE", "GLITCH", "HACKER", "HARDWARE", 
+            "HASH", "HEX", "HTML", "HTTP", "HYPERLINK", "INJECT", "INPUT", "INTERFACE", "IP", "JAVA", 
+            "KERNEL", "KEY", "LATENCY", "LINUX", "LOGIC", "LOGIN", "MALWARE", "MATRIX", "MEMORY", "MODEM", 
+            "MONITOR", "NETWORK", "NODE", "NULL", "OFFLINE", "ONLINE", "OUTPUT", "PACKET", "PASSWORD", "PHISHING", 
+            "PING", "PIXEL", "PORT", "PROCESS", "PROTOCOL", "PROXY", "PYTHON", "QUERY", "RAM", "REBOOT", 
+            "ROOT", "ROUTER", "RUNTIME", "SCRIPT", "SERVER", "SHELL", "SIGNAL", "SOCKET", "SOFTWARE", "SOURCE", 
+            "SPAM", "SQL", "SSH", "STACK", "STATUS", "SYNTAX", "SYSTEM", "TCP", "TERMINAL", "TOKEN", 
+            "TRAFFIC", "TROJAN", "UNIX", "UPLOAD", "URL", "USER", "VECTOR", "VIRUS", "VPN", "WEB", "WIFI", "WORM", "XML", "ZERO",
+            "ADWARE", "ANONYMOUS", "ANTIVIRUS", "APACHE", "API", "APPLET", "ARCHIVE", "ARRAY", "ASCII", "ASSEMBLY",
+            "AUTHENTICATION", "AUTHORIZATION", "AUTORUN", "BACKUP", "BASH", "BATCH", "BETA", "BIGDATA", "BIT", "BLE",
+            "BOOTLOADER", "BOT", "BRIDGE", "BROWSER", "BUG", "BUS", "BYTE", "CABLE", "CAPTCHA", "CDMA",
+            "CERTIFICATE", "CHANNEL", "CHECKSUM", "CHIP", "CLIENT", "CLIPBOARD", "CLOCK", "CMOS", "COAXIAL", "CODEC",
+            "COLLISION", "COMPILED", "COMPRESSION", "CONSOLE", "CONTENT", "CONTROLLER", "CORE", "CPU", "CRAWLER", "CREDENTIALS",
+            "CROSSOVER", "CSS", "CURSOR", "DAEMON", "DASHBOARD", "DATABASE", "DATAGRAM", "DEBUGGER", "DECODE", "DEFAULT",
+            "DEFRAG", "DELETE", "DEPLOY", "DESKTOP", "DEVICE", "DIGITAL", "DIRECTORY", "DISK", "DISPLAY", "DISTRIBUTED",
+            "DNSSEC", "DOCKER", "DOMAIN", "DONGLE", "DOS", "DOWNLOAD", "DRIVER", "DROPOUT", "DSL", "DUPLEX",
+            "DYNAMIC", "ECLIPSE", "EDGE", "EDITOR", "EMAIL", "EMULATOR", "ENCODE", "ENDPOINT", "ENGINE", "ENTERPRISE",
+            "ENTITY", "ENVIRONMENT", "ERROR", "ETHER", "EVENT", "EXCEPTION", "EXECUTABLE", "EXPORT", "EXTENSION", "EXTERNAL",
+            "FAILOVER", "FALSE", "FAN", "FAT32", "FAULT", "FEED", "FETCH", "FIBER", "FIELD", "FILE",
+            "FILTER", "FINDER", "FINGERPRINT", "FIREWIRE", "FIRMWARE", "FLAG", "FLASH", "FLOAT", "FLOPPY", "FLOW",
+            "FOLDER", "FONT", "FOOTER", "FORMAT", "FORTRAN", "FORUM", "FRAME", "FRAMEWORK", "FREQUENCY", "FRONTEND",
+            "FUNCTION", "GAMING", "GARBAGE", "GATE", "GATEWAY", "GENERATE", "GIT", "GITHUB", "GLOBAL", "GNOME",
+            "GNU", "GOOGLE", "GPU", "GRAPH", "GRAPHIC", "GRID", "GROUP", "GUEST", "GUI", "GUID",
+            "HACK", "HALT", "HANDLE", "HANDSHAKE", "HARDDRIVE", "HARDWARE", "HASHTAG", "HEADER", "HEAP", "HERTZ",
+            "HEURISTIC", "HEXADECIMAL", "HIBERNATE", "HIDDEN", "HIERARCHY", "HISTORY", "HIT", "HOME", "HOST", "HOSTING",
+            "HOTSPOT", "HUB", "HYBRID", "HYPERTEXT", "ICON", "IDE", "IDENTITY", "IDLE", "IEEE", "IMAGE",
+            "IMAP", "IMPORT", "INDEX", "INFRARED", "INIT", "INJECTION", "INKJET", "INLINE", "INPUT", "INSERT",
+            "INSTALL", "INSTANCE", "INTEGER", "INTEGRATED", "INTEL", "INTERFACE", "INTERNAL", "INTERNET", "INTERRUPT", "INTRANET",
+            "INVALID", "INVERT", "IOS", "IOT", "IPCONFIG", "IPV4", "IPV6", "IRQ", "ISDN", "ISO",
+            "ISP", "ITERATION", "JAVA", "JAVASCRIPT", "JITTER", "JOB", "JOYSTICK", "JPEG", "JQUERY", "JSON",
+            "JUMP", "JUNCTION", "KERNEL", "KEYBOARD", "KEYGEN", "KEYLOGGER", "KEYWORD", "KILOBYTE", "KIT", "KUBERNETES",
+            "LABEL", "LAN", "LANGUAGE", "LAPTOP", "LASER", "LAYER", "LAYOUT", "LCD", "LEAK", "LEGACY",
+            "LENGTH", "LIBRARY", "LICENSE", "LIGHT", "LIMIT", "LINE", "LINK", "LINUX", "LIST", "LITERAL",
+            "LOAD", "LOCAL", "LOCK", "LOG", "LOGIC", "LOGIN", "LOGO", "LOOP", "LOSSLESS", "LOSSY",
+            "MAC", "MACHINE", "MACRO", "MAIL", "MAINFRAME", "MAINTENANCE", "MALICIOUS", "MANAGED", "MANAGER", "MANIFEST",
+            "MAP", "MASK", "MASTER", "MATCH", "MATRIX", "MAXIMUM", "MEDIA", "MEGABYTE", "MEMORY", "MENU",
+            "MESH", "MESSAGE", "METADATA", "METHOD", "METRIC", "MICRO", "MICRON", "MICROSOFT", "MIDI", "MIME",
+            "MINING", "MIRROR", "MOBILE", "MODE", "MODEL", "MODEM", "MODULE", "MONITOR", "MONOCHROME", "MOTHERBOARD",
+            "MOUNT", "MOUSE", "MP3", "MP4", "MPEG", "MULTICAST", "MEDIA", "MUTEX", "MYSQL", "NAMESPACE"
+        ];
+        const bossSegmentsList = [["FIREWALL", "DAEMON", "ROOT"], ["SECURITY", "PROTOCOL", "OVERRIDE"], ["MAINFRAME", "ENCRYPT", "BYPASS"], ["NEURAL", "NETWORK", "PURGE"], ["SYSTEM", "KERNEL", "PANIC"]];
+
+        let activeWords = [], particles = [], shockwaves = [], floatingTexts = [];
+        let score = 0, combo = 0, integrity = 100, wave = 1, empCharge = 0;
+        let gameRunning = false, spawnTimer = 0, spawnInterval = 2500, globalSpeedMultiplier = 0.8;
+        let lockedWordIndex = -1, freezeTimer = 0, bossActive = false, bossSpawnedInWave = false;
+        let stats = { hits: 0, misses: 0, keystrokes: 0 };
+        let lastTime = 0;
+
+        // Elements
+        const scoreEl = document.getElementById('score');
+        const levelEl = document.getElementById('level');
+        const integrityEl = document.getElementById('integrity');
+        const comboDisplay = document.getElementById('combo-display');
+        const comboVal = document.getElementById('combo-val');
+        const empBar = document.getElementById('emp-bar');
+        const empContainer = document.querySelector('.emp-container');
+        const bonusMsg = document.getElementById('bonus-msg');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const body = document.body;
+
+        class Word {
+            constructor() {
+                this.text = wordList[Math.floor(Math.random() * wordList.length)];
+                this.x = Math.random() * (width - 200) + 50;
+                this.y = -50;
+                // Class Modifier: SPEED
+                this.speed = (Math.random() * 1 + 0.5) * globalSpeedMultiplier * CLASSES[currentClassIdx].speed;
+                this.typedIndex = 0;
+                this.isBoss = false;
+                this.isEncrypted = false;
+                
+                const roll = Math.random();
+                if (roll > 0.96) { this.type = 'FREEZE'; this.color = '#00f3ff'; this.glow = '#00f3ff'; }
+                else if (roll > 0.92) { this.type = 'HEAL'; this.color = '#ffd700'; this.glow = '#ffd700'; }
+                else if (roll > 0.85) { this.type = 'CRYPT'; this.color = '#bd00ff'; this.glow = '#bd00ff'; this.isEncrypted = true; }
+                else { this.type = 'NORMAL'; this.color = CLASSES[currentClassIdx].color; this.glow = CLASSES[currentClassIdx].color; }
+            }
+            update(dt) { if (freezeTimer <= 0) this.y += this.speed * (dt / 16); }
+            draw(ctx, isLocked) {
+                ctx.font = 'bold 24px "Share Tech Mono", monospace';
+                if (isLocked) { ctx.shadowBlur = 15; ctx.shadowColor = this.glow; }
+                else if (this.type !== 'NORMAL') { ctx.shadowBlur = 8; ctx.shadowColor = this.glow; }
+                else { ctx.shadowBlur = 0; }
+
+                let displayText = this.text;
+                if (this.isEncrypted && !isLocked && Math.random() > 0.1) displayText = "#@&%$*!?:".split('').sort(()=>0.5-Math.random()).join('').substring(0, this.text.length);
+
+                const typedPart = this.isEncrypted ? "" : displayText.substring(0, this.typedIndex);
+                const remainPart = this.isEncrypted ? displayText : displayText.substring(this.typedIndex);
+
+                ctx.fillStyle = isLocked ? '#666' : '#444'; // Gray out typed letters
+                ctx.fillText(typedPart, this.x, this.y);
+                const typedWidth = ctx.measureText(typedPart).width;
+                
+                // Highlight next char if locked and not encrypted
+                if (isLocked && !this.isEncrypted && this.typedIndex < this.text.length) {
+                    const nextChar = this.text[this.typedIndex];
+                    ctx.fillStyle = "#fff"; // Bright Highlight
+                    ctx.shadowBlur = 10; ctx.shadowColor = "#fff";
+                    ctx.fillText(nextChar, this.x + typedWidth, this.y);
+                    const nextCharWidth = ctx.measureText(nextChar).width;
+                    
+                    // Remainder
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = this.color; ctx.globalAlpha = 0.8;
+                    ctx.fillText(remainPart.substring(1), this.x + typedWidth + nextCharWidth, this.y);
+                } else {
+                    ctx.fillStyle = this.color; ctx.globalAlpha = isLocked ? 1 : 0.8; 
+                    ctx.fillText(remainPart, this.x + typedWidth, this.y);
+                }
+                ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+            }
+        }
+
+        class Boss extends Word {
+            constructor() {
+                super();
+                this.isBoss = true; this.type = 'BOSS';
+                this.segments = [...bossSegmentsList[Math.floor(Math.random() * bossSegmentsList.length)]];
+                this.text = this.segments[0];
+                this.x = (width / 2) - 100; this.y = -80;
+                this.speed = 0.15 * globalSpeedMultiplier;
+                this.color = '#ff0000'; this.glow = '#ff0000'; this.isEncrypted = false;
+            }
+            advanceSegment() {
+                this.segments.shift(); this.typedIndex = 0;
+                if (this.segments.length > 0) { this.text = this.segments[0]; return true; }
+                return false;
+            }
+            draw(ctx, isLocked) {
+                ctx.font = 'bold 16px monospace'; ctx.fillStyle = '#ff0000';
+                ctx.fillText(`THREAT LEVEL: CRITICAL [${this.segments.length}]`, this.x, this.y - 25);
+                ctx.font = 'bold 40px "Share Tech Mono", monospace';
+                ctx.shadowBlur = 20; ctx.shadowColor = this.glow;
+                
+                const typedPart = this.text.substring(0, this.typedIndex);
+                
+                ctx.fillStyle = '#666'; ctx.fillText(typedPart, this.x, this.y);
+                const typedWidth = ctx.measureText(typedPart).width;
+
+                // Boss Highlight Logic
+                if (this.typedIndex < this.text.length) {
+                    const nextChar = this.text[this.typedIndex];
+                    ctx.fillStyle = "#fff"; // Boss highlight
+                    ctx.shadowColor = "#fff";
+                    ctx.fillText(nextChar, this.x + typedWidth, this.y);
+                    const nextCharWidth = ctx.measureText(nextChar).width;
+                    
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = this.color;
+                    ctx.fillText(this.text.substring(this.typedIndex + 1), this.x + typedWidth + nextCharWidth, this.y);
+                } else {
+                    ctx.fillStyle = this.color; ctx.fillText(this.text.substring(this.typedIndex), this.x + typedWidth, this.y);
+                }
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y; this.vx = (Math.random() - 0.5) * 12; this.vy = (Math.random() - 0.5) * 12;
+                this.life = 1.0; this.color = color || `rgb(0, 255, 0)`; this.size = Math.random() * 3 + 1;
+            }
+            update() { this.x += this.vx; this.y += this.vy; this.life -= 0.04; }
+            draw(ctx) { ctx.globalAlpha = this.life; ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, this.size, this.size); }
+        }
+
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x; this.y = y; this.text = text; this.color = color; this.life = 1.0; this.vy = -1;
+            }
+            update() { this.y += this.vy; this.life -= 0.02; }
+            draw(ctx) {
+                ctx.globalAlpha = this.life; ctx.fillStyle = this.color; ctx.font = "bold 20px monospace";
+                ctx.fillText(this.text, this.x, this.y);
+            }
+        }
+
+        class Shockwave {
+            constructor(x, y) { this.x = x; this.y = y; this.radius = 1; this.life = 1.0; }
+            update() { this.radius += 40; this.life -= 0.02; }
+            draw(ctx) {
+                if(this.life <= 0) return;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(0, 243, 255, ${this.life})`; ctx.lineWidth = 10; ctx.stroke();
+            }
+        }
+
+        function spawnExplosion(x, y, color, count=20) {
+            for(let i=0; i<count; i++) particles.push(new Particle(x, y, color));
+        }
+        function spawnFloatingText(x, y, text, color='#fff') {
+            floatingTexts.push(new FloatingText(x, y, text, color));
+        }
+
+        function showBonusMessage(text, color) {
+            bonusMsg.innerText = text;
+            bonusMsg.style.color = color;
+            bonusMsg.style.opacity = 1;
+            setTimeout(() => { bonusMsg.style.opacity = 0; }, 1500);
+        }
+
+        function initAudioAndStart() {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            Sounds.start(); Sounds.startDrone(); startGame();
+        }
+
+        function startGame() {
+            startScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden');
+            resize(); resetVars(); gameRunning = true; requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            gameOverScreen.classList.add('hidden'); startScreen.classList.remove('hidden');
+            body.classList.remove('frozen', 'boss-active');
+            Sounds.stopBossMusic(); Sounds.stopDrone();
+            updateUI(); // Refresh UI for currency
+        }
+
+        function resetVars() {
+            activeWords = []; particles = []; shockwaves = []; floatingTexts = [];
+            score = 0; combo = 0; wave = 1; empCharge = 0;
+            spawnInterval = 2500; globalSpeedMultiplier = 0.8;
+            lockedWordIndex = -1; freezeTimer = 0;
+            bossActive = false; bossSpawnedInWave = false;
+            stats = { hits: 0, misses: 0, keystrokes: 0 };
+            
+            // Apply Class Modifiers
+            integrity = CLASSES[currentClassIdx].hp;
+            matrixColor = CLASSES[currentClassIdx].color;
+            updateHUD();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            Sounds.stopBossMusic(); Sounds.stopDrone(); Sounds.damage();
+            
+            // Currency Calculation
+            totalData += score;
+            localStorage.setItem('sysDefData', totalData);
+
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('data-earned').innerText = "+" + score;
+            document.getElementById('final-rank').innerText = score > 300 ? "CYBER GOD" : (score > 100 ? "NETRUNNER" : "SCRIPT KIDDIE");
+
+            gameOverScreen.classList.remove('hidden');
+            body.classList.remove('frozen', 'boss-active', 'damage-glitch');
+        }
+
+        function updateHUD() {
+            scoreEl.innerText = score; levelEl.innerText = wave;
+            integrityEl.style.width = Math.min(100, (integrity / CLASSES[currentClassIdx].hp) * 100) + "%";
+            
+            // Dynamic Colors based on HP
+            const hpPercent = integrity / CLASSES[currentClassIdx].hp;
+            if (hpPercent < 0.3) {
+                integrityEl.style.backgroundColor = 'red';
+                document.documentElement.style.setProperty('--term-green', '#ff3333');
+                matrixColor = '#ff3333';
+                if(!bossActive) Sounds.startDrone(1.5); // Fast drone
+            } else {
+                integrityEl.style.backgroundColor = CLASSES[currentClassIdx].color;
+                document.documentElement.style.setProperty('--term-green', CLASSES[currentClassIdx].color);
+                matrixColor = CLASSES[currentClassIdx].color;
+            }
+
+            empBar.style.width = empCharge + "%";
+            if (empCharge >= 100) empContainer.classList.add('emp-ready');
+            else empContainer.classList.remove('emp-ready');
+
+            if (combo > 1) {
+                comboDisplay.classList.add('combo-active');
+                comboVal.innerText = "x" + combo;
+                comboVal.style.color = combo > 5 ? '#ff00ff' : '#ffd700'; 
+            } else {
+                comboDisplay.classList.remove('combo-active');
+            }
+        }
+
+        function takeDamage(amount) {
+            integrity -= amount;
+            Sounds.damage();
+            combo = 0; updateHUD();
+            body.classList.add('damage-glitch');
+            setTimeout(() => body.classList.remove('damage-glitch'), 200);
+            if (integrity <= 0) gameOver();
+        }
+
+        function activateEMP() {
+            if (empCharge < 100) return;
+            empCharge = 0; Sounds.emp();
+            body.classList.add('emp-flash');
+            setTimeout(() => body.classList.remove('emp-flash'), 500);
+            shockwaves.push(new Shockwave(width/2, height/2));
+
+            for (let i = activeWords.length - 1; i >= 0; i--) {
+                const word = activeWords[i];
+                if (!word.isBoss) {
+                    spawnExplosion(word.x+50, word.y, '#fff', 10);
+                    score += Math.floor(word.text.length * CLASSES[currentClassIdx].scoreMult);
+                    activeWords.splice(i, 1);
+                } else {
+                    if (word.advanceSegment()) {
+                        spawnExplosion(word.x+100, word.y, '#f00', 10);
+                    } else {
+                        spawnExplosion(word.x+100, word.y, '#f00', 50);
+                        bossActive = false; body.classList.remove('boss-active'); Sounds.stopBossMusic();
+                        activeWords.splice(i, 1);
+                        score += 50;
+                    }
+                }
+            }
+            lockedWordIndex = -1; updateHUD();
+        }
+
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+            const deltaTime = timestamp - lastTime || 16; lastTime = timestamp;
+
+            ctx.clearRect(0, 0, width, height);
+            drawMatrix();
+
+            if (freezeTimer > 0) {
+                freezeTimer -= deltaTime;
+                if (freezeTimer <= 0) { freezeTimer = 0; body.classList.remove('frozen'); }
+            } else {
+                spawnTimer += deltaTime;
+                if (wave % 4 === 0 && !bossSpawnedInWave && !bossActive) {
+                    bossActive = true; bossSpawnedInWave = true;
+                    activeWords.push(new Boss());
+                    body.classList.add('boss-active');
+                    showBonusMessage("WARNING: FIREWALL DETECTED", "#ff0000");
+                    Sounds.error(); Sounds.startBossMusic();
+                } else if (spawnTimer > (bossActive ? spawnInterval * 2 : spawnInterval)) {
+                    if (!bossActive || Math.random() > 0.5) activeWords.push(new Word());
+                    spawnTimer = 0;
+                }
+            }
+
+            for (let i = activeWords.length - 1; i >= 0; i--) {
+                let word = activeWords[i];
+                word.update(deltaTime);
+                if (word.isBoss && word.y > height - 50) { integrity = 0; updateHUD(); gameOver(); return; }
+                if (word.y > height - 20) {
+                    takeDamage(10);
+                    if (i === lockedWordIndex) lockedWordIndex = -1; else if (i < lockedWordIndex) lockedWordIndex--; 
+                    activeWords.splice(i, 1);
+                }
+                updateHUD();
+                word.draw(ctx, i === lockedWordIndex);
+            }
+
+            [particles, shockwaves, floatingTexts].forEach(arr => {
+                for (let i = arr.length - 1; i >= 0; i--) {
+                    arr[i].update(); arr[i].draw(ctx);
+                    if (arr[i].life <= 0) arr.splice(i, 1);
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (!gameRunning) return;
+            if (e.code === 'Space') { activateEMP(); return; }
+            if (e.code === 'Tab') { e.preventDefault(); 
+                // Scan logic
+                let closest = -1, maxY = -Infinity;
+                activeWords.forEach((w, i) => { if(w.isEncrypted && w.y > maxY) { maxY = w.y; closest = i; } });
+                if (closest !== -1) {
+                    activeWords[closest].isEncrypted = false;
+                    spawnExplosion(activeWords[closest].x + 50, activeWords[closest].y, '#bd00ff', 5);
+                    Sounds.scan(); showBonusMessage("DECRYPTED", "#bd00ff");
+                } else Sounds.error();
+                return; 
+            }
+            if (e.key.length > 1) return; 
+
+            stats.keystrokes++;
+            const key = e.key.toUpperCase();
+            
+            if (lockedWordIndex !== -1) {
+                const word = activeWords[lockedWordIndex];
+                if (!word) { lockedWordIndex = -1; return; }
+                if (word.isEncrypted) { Sounds.error(); combo = 0; updateHUD(); return; }
+
+                if (key === word.text[word.typedIndex]) {
+                    word.typedIndex++;
+                    stats.hits++;
+                    Sounds.type();
+                    
+                    if (word.typedIndex === word.text.length) {
+                        if (word.isBoss) {
+                            Sounds.bossHit();
+                            spawnExplosion(word.x + 100, word.y, '#f00', 10);
+                            body.classList.add('damage-glitch'); setTimeout(() => body.classList.remove('damage-glitch'), 100);
+                            if (!word.advanceSegment()) {
+                                Sounds.bossDie(); spawnExplosion(word.x + 100, word.y, '#f00', 50);
+                                showBonusMessage("FIREWALL BREACHED", "#0f0");
+                                score += 50; bossActive = false; body.classList.remove('boss-active'); Sounds.stopBossMusic(); 
+                                activeWords.splice(lockedWordIndex, 1); lockedWordIndex = -1;
+                            }
+                        } else {
+                            Sounds.explosion(); spawnExplosion(word.x + 50, word.y, word.color);
+                            if (word.type === 'FREEZE') { freezeTimer = 3000; body.classList.add('frozen'); Sounds.freeze(); showBonusMessage("SYSTEM FREEZE", "#00f3ff"); }
+                            else if (word.type === 'HEAL') { integrity = Math.min(CLASSES[currentClassIdx].hp, integrity + 15); Sounds.heal(); showBonusMessage("REPAIR", "#ffd700"); }
+                            
+                            // Adrenaline Mode: Score x2 if health < 30%
+                            const multiplier = (integrity / CLASSES[currentClassIdx].hp < 0.3) ? 2 : 1;
+                            const pts = (word.text.length + Math.floor(combo / 5)) * CLASSES[currentClassIdx].scoreMult * multiplier;
+                            score += Math.floor(pts);
+                            spawnFloatingText(word.x, word.y, `+${Math.floor(pts)}`, word.color);
+
+                            combo++;
+                            empCharge = Math.min(100, empCharge + (5 * CLASSES[currentClassIdx].empRate));
+
+                            activeWords.splice(lockedWordIndex, 1);
+                            lockedWordIndex = -1;
+                            if (score > 0 && score % 10 === 0) {
+                                wave++; bossSpawnedInWave = false;
+                                globalSpeedMultiplier += 0.05; spawnInterval = Math.max(600, spawnInterval - 50);
+                            }
+                        }
+                        updateHUD();
+                    }
+                } else { stats.misses++; Sounds.error(); combo = 0; updateHUD(); }
+            } else {
+                let bestIdx = -1, maxY = -Infinity;
+                activeWords.forEach((w, i) => { if (!w.isEncrypted && w.text.startsWith(key) && w.y > maxY) { maxY = w.y; bestIdx = i; } });
+
+                if (bestIdx !== -1) {
+                    lockedWordIndex = bestIdx;
+                    activeWords[bestIdx].typedIndex = 1;
+                    stats.hits++;
+                    Sounds.lock();
+                    if (activeWords[bestIdx].text.length === 1 && !activeWords[bestIdx].isBoss) {
+                        // Instant kill (rare)
+                        Sounds.explosion(); spawnExplosion(activeWords[bestIdx].x, activeWords[bestIdx].y, activeWords[bestIdx].color);
+                        score += 1; activeWords.splice(bestIdx, 1); lockedWordIndex = -1;
+                        combo++; updateHUD();
+                    }
+                } else { stats.misses++; Sounds.error(); combo = 0; updateHUD(); }
+            }
+        });
+    </script>
+</body>
+</html>
