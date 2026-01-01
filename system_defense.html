@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYSTEM DEFENSE // V2.1</title>
+    <title>SYSTEM DEFENSE // V3.0 MATRIX</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
 
@@ -30,7 +30,6 @@
             transition: box-shadow 0.3s;
         }
 
-        /* Classe ajoutée quand le temps est gelé */
         body.frozen {
             box-shadow: inset 0 0 50px var(--term-blue);
         }
@@ -50,6 +49,26 @@
             z-index: 10;
         }
 
+        /* Alert Overlay (Boss) */
+        .alert-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: red;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9;
+            transition: opacity 0.5s;
+            mix-blend-mode: overlay;
+        }
+        .boss-active .alert-overlay {
+            animation: pulseAlert 1s infinite;
+        }
+        @keyframes pulseAlert {
+            0% { opacity: 0; }
+            50% { opacity: 0.3; }
+            100% { opacity: 0; }
+        }
+
         /* HUD */
         #ui-layer {
             position: absolute;
@@ -61,7 +80,7 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            z-index: 5;
+            z-index: 15;
             padding: 20px;
             box-sizing: border-box;
         }
@@ -77,6 +96,9 @@
         .stat-block {
             display: flex;
             flex-direction: column;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 4px;
         }
         
         .label { font-size: 0.8rem; opacity: 0.7; }
@@ -91,7 +113,6 @@
         }
         .combo-active { opacity: 1; }
 
-        /* Notification de bonus (FREEZE / REPAIR) */
         #bonus-msg {
             position: absolute;
             top: 20%;
@@ -102,7 +123,8 @@
             opacity: 0;
             transition: opacity 0.5s;
             text-shadow: 0 0 20px currentColor;
-            z-index: 8;
+            z-index: 18;
+            text-align: center;
         }
 
         .integrity-bar-container {
@@ -111,6 +133,7 @@
             border: 2px solid var(--term-green);
             padding: 2px;
             margin-top: 5px;
+            background: rgba(0,0,0,0.5);
         }
 
         .integrity-fill {
@@ -157,8 +180,10 @@
             gap: 20px;
             margin-bottom: 30px;
             font-size: 0.9rem;
+            flex-wrap: wrap;
+            justify-content: center;
         }
-        .legend-item { display: flex; align-items: center; gap: 10px; }
+        .legend-item { display: flex; align-items: center; gap: 10px; margin: 5px; }
         .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 
         button {
@@ -173,6 +198,8 @@
             text-transform: uppercase;
             transition: 0.2s;
             box-shadow: 0 0 10px var(--term-green);
+            position: relative;
+            z-index: 30;
         }
 
         button:hover {
@@ -194,12 +221,23 @@
             100% { transform: translate(1px, -2px) rotate(-1deg); }
         }
 
-        canvas { display: block; }
+        /* Canvas Layers */
+        #matrixCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 0;
+        }
+        #gameCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
     </style>
 </head>
 <body>
 
     <div class="crt-overlay"></div>
+    <div class="alert-overlay"></div>
 
     <!-- HUD -->
     <div id="ui-layer">
@@ -234,26 +272,21 @@
     <div id="start-screen" class="screen">
         <h1>SYSTEM DEFENSE</h1>
         <p>
-            Tapez les mots pour détruire les virus.<br>
-            Attention à la barre d'intégrité en bas.
+            Détruisez les virus avant qu'ils n'atteignent le noyau.<br>
+            Attention au <strong>BOSS FIREWALL</strong> tous les 5 niveaux.
         </p>
 
         <div class="legend">
-            <div class="legend-item">
-                <span class="dot" style="background:var(--term-green); box-shadow:0 0 5px var(--term-green)"></span> NORMAL
-            </div>
-            <div class="legend-item">
-                <span class="dot" style="background:var(--term-blue); box-shadow:0 0 5px var(--term-blue)"></span> GEL (3s)
-            </div>
-            <div class="legend-item">
-                <span class="dot" style="background:var(--term-gold); box-shadow:0 0 5px var(--term-gold)"></span> SOIN (+15%)
-            </div>
+            <div class="legend-item"><span class="dot" style="background:var(--term-green)"></span> NORMAL</div>
+            <div class="legend-item"><span class="dot" style="background:var(--term-blue)"></span> GEL (3s)</div>
+            <div class="legend-item"><span class="dot" style="background:var(--term-gold)"></span> SOIN</div>
+            <div class="legend-item"><span class="dot" style="background:var(--term-red)"></span> BOSS</div>
         </div>
 
         <div style="margin-bottom: 20px; font-size: 1.2rem; color: var(--term-gold);">
             MEILLEUR SCORE LOCAL : <span id="high-score-start">0</span>
         </div>
-        <button onclick="initAudioAndStart()">INITIALIZE_DEFENSE.EXE</button>
+        <button onclick="initAudioAndStart()">ENTER THE MATRIX</button>
     </div>
 
     <!-- Game Over Screen -->
@@ -267,33 +300,85 @@
         <button onclick="resetGame()">REBOOT SYSTEM</button>
     </div>
 
+    <canvas id="matrixCanvas"></canvas>
     <canvas id="gameCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const mCanvas = document.getElementById('matrixCanvas');
+        const mCtx = mCanvas.getContext('2d');
 
         // --- AUDIO ENGINE (Web Audio API) ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let droneOsc, lfoOsc, droneGain;
+        let isMuted = false;
         
         const Sounds = {
-            type: () => playTone(800, 'square', 0.05, 0.1),
-            lock: () => playTone(1200, 'sine', 0.1, 0.1),
-            explosion: () => playNoise(0.3),
+            type: () => playTone(800, 'square', 0.05, 0.05),
+            lock: () => playTone(1200, 'sine', 0.1, 0.05),
+            explosion: () => playNoise(0.2),
+            bossHit: () => {
+                playTone(150, 'sawtooth', 0.1, 0.2); 
+                playNoise(0.1);
+            },
+            bossDie: () => {
+                playTone(100, 'sawtooth', 1.0, 0.5);
+                playNoise(1.0);
+            },
             freeze: () => {
-                playTone(400, 'sine', 0.1, 0.2);
-                setTimeout(() => playTone(300, 'sine', 0.3, 0.2), 100);
+                playTone(400, 'sine', 0.1, 0.1);
+                setTimeout(() => playTone(300, 'sine', 0.3, 0.1), 100);
             },
             heal: () => {
-                playTone(600, 'triangle', 0.1, 0.2);
-                setTimeout(() => playTone(900, 'triangle', 0.3, 0.2), 100);
+                playTone(600, 'triangle', 0.1, 0.1);
+                setTimeout(() => playTone(900, 'triangle', 0.3, 0.1), 100);
             },
-            error: () => playTone(150, 'sawtooth', 0.2, 0.2),
-            damage: () => playTone(100, 'sawtooth', 0.5, 0.5),
+            error: () => playTone(150, 'sawtooth', 0.1, 0.1),
+            damage: () => playTone(100, 'sawtooth', 0.4, 0.3),
             start: () => {
                 playTone(400, 'sine', 0.1, 0.1);
                 setTimeout(() => playTone(600, 'sine', 0.1, 0.1), 100);
-                setTimeout(() => playTone(1000, 'square', 0.4, 0.2), 200);
+                setTimeout(() => playTone(1000, 'square', 0.4, 0.1), 200);
+            },
+            startDrone: () => {
+                if(droneOsc) return;
+                // Deep drone setup
+                droneOsc = audioCtx.createOscillator();
+                droneOsc.type = 'sawtooth';
+                droneOsc.frequency.value = 55; // A1 (Low)
+
+                // LFO to modulate filter
+                lfoOsc = audioCtx.createOscillator();
+                lfoOsc.type = 'sine';
+                lfoOsc.frequency.value = 0.2; // Slow modulation
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 200;
+
+                const lfoGain = audioCtx.createGain();
+                lfoGain.gain.value = 100;
+
+                droneGain = audioCtx.createGain();
+                droneGain.gain.value = 0.05; // Very quiet
+
+                lfoOsc.connect(lfoGain);
+                lfoGain.connect(filter.frequency);
+                
+                droneOsc.connect(filter);
+                filter.connect(droneGain);
+                droneGain.connect(audioCtx.destination);
+
+                droneOsc.start();
+                lfoOsc.start();
+            },
+            stopDrone: () => {
+                if (droneOsc) {
+                    droneOsc.stop();
+                    lfoOsc.stop();
+                    droneOsc = null;
+                }
             }
         };
 
@@ -322,11 +407,43 @@
             const noise = audioCtx.createBufferSource();
             noise.buffer = buffer;
             const gain = audioCtx.createGain();
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
             noise.connect(gain);
             gain.connect(audioCtx.destination);
             noise.start();
+        }
+
+        // --- MATRIX RAIN ---
+        let drops = [];
+        const fontSize = 16;
+        let columns;
+        const matrixChars = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789";
+
+        function initMatrix() {
+            columns = Math.floor(width / fontSize);
+            drops = [];
+            for (let i = 0; i < columns; i++) {
+                drops[i] = Math.random() * -100; // Start above screen
+            }
+        }
+
+        function drawMatrix() {
+            mCtx.fillStyle = "rgba(5, 5, 5, 0.1)"; // Trail effect
+            mCtx.fillRect(0, 0, width, height);
+
+            mCtx.fillStyle = "#0F0"; 
+            mCtx.font = fontSize + "px monospace";
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = matrixChars.charAt(Math.floor(Math.random() * matrixChars.length));
+                mCtx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
         }
 
         // --- GAME CONFIG ---
@@ -334,11 +451,14 @@
         const resize = () => {
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
+            mCanvas.width = width;
+            mCanvas.height = height;
             ctx.font = '24px "Share Tech Mono", monospace';
+            initMatrix();
         };
         window.addEventListener('resize', resize);
-        resize();
-
+        
+        // --- DATA ---
         const wordList = [
             "ACCESS", "ALGORITHM", "BACKDOOR", "BANDWIDTH", "BINARY", "BIOS", "BITCOIN", "BLOCKCHAIN", 
             "BOTNET", "BUFFER", "BYPASS", "CACHE", "CIPHER", "CLOUD", "CLUSTER", "CODE", "COMMAND", 
@@ -354,12 +474,19 @@
             "UPLOAD", "URL", "USER", "VECTOR", "VIRUS", "VPN", "WEB", "WIFI", "WORM", "XML", "ZERO"
         ];
 
+        const bossSegmentsList = [
+            ["FIREWALL", "DAEMON", "ROOT"],
+            ["SECURITY", "PROTOCOL", "OVERRIDE"],
+            ["MAINFRAME", "ENCRYPT", "BYPASS"],
+            ["NEURAL", "NETWORK", "PURGE"],
+            ["SYSTEM", "KERNEL", "PANIC"]
+        ];
+
         // --- STATE ---
         let activeWords = [];
         let particles = [];
         let score = 0;
         let combo = 0;
-        let maxCombo = 0;
         let integrity = 100;
         let wave = 1;
         let gameRunning = false;
@@ -368,9 +495,11 @@
         let spawnInterval = 2000;
         let globalSpeedMultiplier = 1;
         let lockedWordIndex = -1;
-        let freezeTimer = 0; // Timer for the freeze effect in ms
+        let freezeTimer = 0; 
         
-        // High Score
+        let bossActive = false;
+        let bossSpawnedInWave = false;
+
         let highScore = localStorage.getItem('sysDefHighScore') || 0;
         document.getElementById('high-score-start').innerText = highScore;
 
@@ -385,6 +514,7 @@
         const startScreen = document.getElementById('start-screen');
         const gameOverScreen = document.getElementById('game-over-screen');
         const bonusMsg = document.getElementById('bonus-msg');
+        const body = document.body;
 
         class Word {
             constructor() {
@@ -393,26 +523,26 @@
                 this.y = -50;
                 this.speed = (Math.random() * 1 + 0.5) * globalSpeedMultiplier;
                 this.typedIndex = 0;
+                this.isBoss = false;
                 
                 // Bonus Logic
                 const roll = Math.random();
                 if (roll > 0.95) {
                     this.type = 'FREEZE';
-                    this.color = '#00f3ff'; // Blue
+                    this.color = '#00f3ff'; 
                     this.glow = '#00f3ff';
                 } else if (roll > 0.90) {
                     this.type = 'HEAL';
-                    this.color = '#ffd700'; // Gold
+                    this.color = '#ffd700';
                     this.glow = '#ffd700';
                 } else {
                     this.type = 'NORMAL';
-                    this.color = '#0f0'; // Green
+                    this.color = '#0f0'; 
                     this.glow = '#0f0';
                 }
             }
 
             update(deltaTime) {
-                // If freeze active, do NOT move
                 if (freezeTimer <= 0) {
                     this.y += this.speed * (deltaTime / 16);
                 }
@@ -425,7 +555,6 @@
                     ctx.shadowBlur = 15;
                     ctx.shadowColor = this.glow;
                 } else if (this.type !== 'NORMAL') {
-                    // Always glow a bit if special
                     ctx.shadowBlur = 8;
                     ctx.shadowColor = this.glow;
                 } else {
@@ -444,6 +573,58 @@
                 ctx.globalAlpha = isLocked ? 1 : 0.8; 
                 ctx.fillText(remainPart, this.x + typedWidth, this.y);
                 ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Boss extends Word {
+            constructor() {
+                super();
+                this.isBoss = true;
+                this.type = 'BOSS';
+                // Pick random segment set
+                this.segments = [...bossSegmentsList[Math.floor(Math.random() * bossSegmentsList.length)]];
+                this.text = this.segments[0]; // Current active segment
+                
+                this.x = (width / 2) - 100; // Center ish
+                this.y = -80;
+                this.speed = 0.15; // Slow but deadly
+                this.color = '#ff0000';
+                this.glow = '#ff0000';
+            }
+
+            advanceSegment() {
+                this.segments.shift();
+                this.typedIndex = 0;
+                if (this.segments.length > 0) {
+                    this.text = this.segments[0];
+                    return true; // Still alive
+                }
+                return false; // Dead
+            }
+
+            draw(ctx, isLocked) {
+                ctx.font = 'bold 40px "Share Tech Mono", monospace'; // Bigger font
+                
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = this.glow;
+
+                // Draw boss bar or name
+                ctx.fillStyle = '#ff0000';
+                ctx.font = 'bold 16px monospace';
+                ctx.fillText(`THREAT LEVEL: CRITICAL [${this.segments.length} SECTORS]`, this.x, this.y - 20);
+
+                ctx.font = 'bold 40px "Share Tech Mono", monospace';
+                const typedPart = this.text.substring(0, this.typedIndex);
+                const remainPart = this.text.substring(this.typedIndex);
+
+                ctx.fillStyle = '#fff';
+                ctx.fillText(typedPart, this.x, this.y);
+
+                const typedWidth = ctx.measureText(typedPart).width;
+
+                ctx.fillStyle = this.color;
+                ctx.fillText(remainPart, this.x + typedWidth, this.y);
                 ctx.shadowBlur = 0;
             }
         }
@@ -471,8 +652,8 @@
             }
         }
 
-        function spawnExplosion(x, y, color) {
-            for(let i=0; i<20; i++) {
+        function spawnExplosion(x, y, color, count=20) {
+            for(let i=0; i<count; i++) {
                 particles.push(new Particle(x, y, color));
             }
         }
@@ -480,12 +661,14 @@
         function initAudioAndStart() {
             if(audioCtx.state === 'suspended') audioCtx.resume();
             Sounds.start();
+            Sounds.startDrone();
             startGame();
         }
 
         function startGame() {
             startScreen.classList.add('hidden');
             gameOverScreen.classList.add('hidden');
+            resize(); // Init Matrix
             resetVars();
             gameRunning = true;
             requestAnimationFrame(gameLoop);
@@ -495,8 +678,10 @@
             gameOverScreen.classList.add('hidden');
             startScreen.classList.remove('hidden');
             document.body.classList.remove('frozen');
+            document.body.classList.remove('boss-active');
             bonusMsg.style.opacity = 0;
             document.getElementById('high-score-start').innerText = highScore;
+            Sounds.stopDrone();
         }
 
         function resetVars() {
@@ -510,11 +695,14 @@
             globalSpeedMultiplier = 1;
             lockedWordIndex = -1;
             freezeTimer = 0;
+            bossActive = false;
+            bossSpawnedInWave = false;
             updateHUD();
         }
 
         function gameOver() {
             gameRunning = false;
+            Sounds.stopDrone();
             Sounds.damage();
             if (score > highScore) {
                 highScore = score;
@@ -524,6 +712,7 @@
             finalBestEl.innerText = highScore;
             gameOverScreen.classList.remove('hidden');
             document.body.classList.remove('frozen');
+            document.body.classList.remove('boss-active');
         }
 
         function updateHUD() {
@@ -531,7 +720,6 @@
             levelEl.innerText = wave;
             integrityEl.style.width = integrity + "%";
             
-            // Combo logic
             if (combo > 1) {
                 comboDisplay.classList.add('combo-active');
                 comboVal.innerText = "x" + combo;
@@ -558,8 +746,10 @@
         }
 
         function increaseDifficulty() {
+            // New wave every 10 points or Boss Death
             if (score > 0 && score % 10 === 0) {
                 wave++;
+                bossSpawnedInWave = false; // Reset boss flag for new wave
                 globalSpeedMultiplier += 0.1;
                 spawnInterval = Math.max(500, spawnInterval - 100);
             }
@@ -572,8 +762,11 @@
             lastTime = timestamp;
 
             ctx.clearRect(0, 0, width, height);
+            
+            // Draw Matrix Background
+            drawMatrix();
 
-            // Gestion du Freeze Timer
+            // Gestion du Freeze
             if (freezeTimer > 0) {
                 freezeTimer -= deltaTime;
                 if (freezeTimer <= 0) {
@@ -581,10 +774,24 @@
                     document.body.classList.remove('frozen');
                 }
             } else {
-                // Seulement spawn si pas gelé
+                // Spawn Logic
                 spawnTimer += deltaTime;
-                if (spawnTimer > spawnInterval) {
-                    activeWords.push(new Word());
+                
+                // Boss Check
+                if (wave % 5 === 0 && !bossSpawnedInWave && !bossActive) {
+                    // Spawn BOSS
+                    bossActive = true;
+                    bossSpawnedInWave = true;
+                    activeWords.push(new Boss());
+                    body.classList.add('boss-active');
+                    showBonusMessage("WARNING: FIREWALL DETECTED", "#ff0000");
+                    Sounds.error(); // Alarm sound
+                }
+                // Regular spawn (less frequent if boss is active)
+                else if (spawnTimer > (bossActive ? spawnInterval * 2 : spawnInterval)) {
+                    if (!bossActive || Math.random() > 0.5) {
+                        activeWords.push(new Word());
+                    }
                     spawnTimer = 0;
                 }
             }
@@ -594,6 +801,15 @@
                 word.update(deltaTime);
                 
                 // Collision bas
+                // Boss collision = INSTANT DEATH
+                if (word.isBoss && word.y > height - 50) {
+                    integrity = 0;
+                    updateHUD();
+                    gameOver();
+                    return;
+                }
+                
+                // Normal collision
                 if (word.y > height - 20) {
                     integrity -= 10;
                     Sounds.damage();
@@ -645,30 +861,49 @@
                     Sounds.type();
                     
                     if (word.typedIndex === word.text.length) {
-                        // Word destroyed
-                        Sounds.explosion();
-                        spawnExplosion(word.x + 50, word.y, word.color);
-                        
-                        // --- BONUS EFFECTS ---
-                        if (word.type === 'FREEZE') {
-                            freezeTimer = 3000; // 3 seconds
-                            document.body.classList.add('frozen');
-                            Sounds.freeze();
-                            showBonusMessage("SYSTEM FREEZE", "#00f3ff");
-                        } else if (word.type === 'HEAL') {
-                            integrity = Math.min(100, integrity + 15);
-                            Sounds.heal();
-                            showBonusMessage("REPAIR +15%", "#ffd700");
-                        }
+                        // Word Finished
+                        if (word.isBoss) {
+                            // Boss Segment Logic
+                            Sounds.bossHit();
+                            spawnExplosion(word.x + 100, word.y, '#ff0000', 10);
+                            document.body.classList.add('shake');
+                            setTimeout(() => document.body.classList.remove('shake'), 200);
 
-                        // Score logic
-                        let points = 1 + Math.floor(combo / 5);
-                        score += points;
-                        combo++;
-                        
-                        activeWords.splice(lockedWordIndex, 1);
-                        lockedWordIndex = -1;
-                        increaseDifficulty();
+                            if (!word.advanceSegment()) {
+                                // BOSS DEAD
+                                Sounds.bossDie();
+                                spawnExplosion(word.x + 100, word.y, '#ff0000', 50);
+                                showBonusMessage("FIREWALL BREACHED", "#0f0");
+                                score += 50;
+                                bossActive = false;
+                                body.classList.remove('boss-active');
+                                activeWords.splice(lockedWordIndex, 1);
+                                lockedWordIndex = -1;
+                            }
+                        } else {
+                            // Normal Word Logic
+                            Sounds.explosion();
+                            spawnExplosion(word.x + 50, word.y, word.color);
+                            
+                            if (word.type === 'FREEZE') {
+                                freezeTimer = 3000; 
+                                document.body.classList.add('frozen');
+                                Sounds.freeze();
+                                showBonusMessage("SYSTEM FREEZE", "#00f3ff");
+                            } else if (word.type === 'HEAL') {
+                                integrity = Math.min(100, integrity + 15);
+                                Sounds.heal();
+                                showBonusMessage("REPAIR +15%", "#ffd700");
+                            }
+
+                            let points = 1 + Math.floor(combo / 5);
+                            score += points;
+                            combo++;
+                            
+                            activeWords.splice(lockedWordIndex, 1);
+                            lockedWordIndex = -1;
+                            increaseDifficulty();
+                        }
                         updateHUD();
                     }
                 } else {
@@ -677,10 +912,12 @@
                 }
             } 
             else {
+                // Find new target
                 let bestCandidateIndex = -1;
                 let maxY = -Infinity;
 
                 for (let i = 0; i < activeWords.length; i++) {
+                    // Boss priority ? Maybe not, player choice.
                     if (activeWords[i].text.startsWith(key)) {
                         if (activeWords[i].y > maxY) {
                             maxY = activeWords[i].y;
@@ -694,8 +931,8 @@
                     activeWords[lockedWordIndex].typedIndex = 1;
                     Sounds.lock();
                     
-                    if (activeWords[lockedWordIndex].text.length === 1) {
-                         // One letter word case (rare but possible)
+                    // Instant kill single letter (rare)
+                    if (activeWords[lockedWordIndex].text.length === 1 && !activeWords[lockedWordIndex].isBoss) {
                          Sounds.explosion();
                          spawnExplosion(activeWords[lockedWordIndex].x, activeWords[lockedWordIndex].y, activeWords[lockedWordIndex].color);
                          activeWords.splice(lockedWordIndex, 1);
