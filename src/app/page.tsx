@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Link from "next/link";
 import styles from "./page.module.css";
 
 const EFFECTS = ["matrix", "glitch", "portal", "invert", "static"] as const;
@@ -106,9 +107,9 @@ export default function Home() {
         <div className={styles.logoSubtext}>REALITY DISTORTION EXPERIMENT</div>
       </div>
 
-      <a className={styles.contributorsLink} href="/contributors">
+      <Link className={styles.contributorsLink} href="/contributors">
         Contributeurs
-      </a>
+      </Link>
 
       {activeEffect === "matrix" && (
         <div className={styles.matrixRain}>

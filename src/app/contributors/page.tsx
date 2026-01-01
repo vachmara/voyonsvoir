@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import styles from "./contributors.module.css";
 
 interface Contributor {
@@ -230,9 +231,9 @@ export default async function ContributorsPage() {
           </p>
         )}
 
-        <a href="/" className={styles.backLink}>
+        <Link href="/" className={styles.backLink}>
           ← Retour à l&apos;accueil
-        </a>
+        </Link>
       </main>
     </div>
   );
