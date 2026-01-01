@@ -18,3 +18,5 @@ Voici un repo totalement vide : vous en faites ce que vous voulez, vous dev tout
 ---
 
 # HAVE FUN ! And PUT ME IN BIKINI NOW ! 👙
+
+## QR code CLI
