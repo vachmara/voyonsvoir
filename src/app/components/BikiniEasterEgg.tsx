@@ -12,6 +12,17 @@ export default function BikiniEasterEgg() {
 
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
+      // Ignore if user is typing in an input field or modifier keys are pressed
+      const target = event.target as HTMLElement;
+      const isInputField = target.tagName === 'INPUT' || 
+                          target.tagName === 'TEXTAREA' || 
+                          target.isContentEditable;
+      const hasModifier = event.ctrlKey || event.metaKey || event.altKey;
+      
+      if (isInputField || hasModifier) {
+        return;
+      }
+      
       const key = event.key.toLowerCase();
       
       // Only track letter keys
