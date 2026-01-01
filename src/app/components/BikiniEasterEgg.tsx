@@ -12,6 +12,15 @@ export default function BikiniEasterEgg() {
 
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
+      // Handle ESC key to dismiss overlay
+      if (showOverlay && event.key === 'Escape') {
+        setShowOverlay(false);
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        return;
+      }
+      
       // Ignore if user is typing in an input field or modifier keys are pressed
       const target = event.target as HTMLElement;
       const isInputField = target.tagName === 'INPUT' || 
@@ -60,27 +69,32 @@ export default function BikiniEasterEgg() {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, []);
+  }, [showOverlay]);
 
   if (!showOverlay) return null;
 
   return (
-    <div className={styles.overlay}>
+    <div 
+      className={styles.overlay}
+      role="dialog"
+      aria-label="Bikini mode easter egg"
+      aria-live="polite"
+    >
       <div className={styles.content}>
         <div className={styles.emojiContainer}>
-          <span className={styles.emoji}>👙</span>
-          <span className={styles.emoji}>🏖️</span>
-          <span className={styles.emoji}>👙</span>
-          <span className={styles.emoji}>☀️</span>
-          <span className={styles.emoji}>👙</span>
-          <span className={styles.emoji}>🌊</span>
-          <span className={styles.emoji}>👙</span>
+          <span className={styles.emoji} aria-hidden="true">👙</span>
+          <span className={styles.emoji} aria-hidden="true">🏖️</span>
+          <span className={styles.emoji} aria-hidden="true">👙</span>
+          <span className={styles.emoji} aria-hidden="true">☀️</span>
+          <span className={styles.emoji} aria-hidden="true">👙</span>
+          <span className={styles.emoji} aria-hidden="true">🌊</span>
+          <span className={styles.emoji} aria-hidden="true">👙</span>
         </div>
         <h1 className={styles.title}>PUT ME IN BIKINI NOW ! 👙</h1>
         <div className={styles.waves}>
-          <span className={styles.wave}>🌊</span>
-          <span className={styles.wave}>🌊</span>
-          <span className={styles.wave}>🌊</span>
+          <span className={styles.wave} aria-hidden="true">🌊</span>
+          <span className={styles.wave} aria-hidden="true">🌊</span>
+          <span className={styles.wave} aria-hidden="true">🌊</span>
         </div>
       </div>
     </div>
